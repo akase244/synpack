@@ -9,14 +9,14 @@ import (
 )
 
 func main() {
-    // コマンドライン引数を設定 (nping, hping3風)
+    // 引数の設定
     count := flag.Int("c", 5, "Number of packets to send")
     port := flag.Int("p", 80, "Target port")
     synFlag := flag.Bool("S", false, "Set SYN flag")
     ackFlag := flag.Bool("A", false, "Set ACK flag")
     pushFlag := flag.Bool("P", false, "Set PUSH flag")
 
-    // ホスト名は最後の引数として取得
+    // ホスト名は最後の引数で指定
     flag.Parse()
     if len(flag.Args()) < 1 {
         fmt.Println("Error: Host must be specified")
@@ -24,46 +24,60 @@ func main() {
     }
     host := flag.Args()[0]
 
-    // オプションの確認
-    fmt.Printf("Host: %s, Port: %d, Count: %d\n", host, *port, *count)
+    // オプションの表示
+    fmt.Printf("HPING %s (%s): %d packets\n", host, host, *count)
     fmt.Printf("Flags - SYN: %t, ACK: %t, PUSH: %t\n", *synFlag, *ackFlag, *pushFlag)
 
-    // RTT計測
+    // 送信、受信、RTTの初期化
     var rttTimes []time.Duration
+    packetsSent := 0
+    packetsReceived := 0
+
+    // パケット送信ループ
     for i := 0; i < *count; i++ {
         start := time.Now()
 
         conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", host, *port))
         if err != nil {
-            fmt.Println("Error:", err)
+            fmt.Printf("Request timeout for icmp_seq %d\n", i+1)
             continue
         }
         defer conn.Close()
 
-        // RTTの計測
+        // パケット送信
+        packetsSent++
         rtt := time.Since(start)
-        fmt.Printf("RTT: %v\n", rtt)
         rttTimes = append(rttTimes, rtt)
+        packetsReceived++
 
-        // TCPフラグの設定 (Raw socket等で拡張可能)
+        // 送信したパケットのRTTを表示
+        fmt.Printf("64 bytes from %s: icmp_seq=%d ttl=64 time=%.2f ms\n", host, i+1, float64(rtt.Milliseconds()))
+
+        // TCPフラグの設定（SYN, ACK, PUSH）
         if *synFlag {
-            fmt.Println("SYN flag is set")
-            // SYNフラグ送信ロジックを追加
+            fmt.Println("[SYN flag set]")
+            // SYNフラグ送信ロジックをここに追加
         }
         if *ackFlag {
-            fmt.Println("ACK flag is set")
-            // ACKフラグ送信ロジックを追加
+            fmt.Println("[ACK flag set]")
+            // ACKフラグ送信ロジックをここに追加
         }
         if *pushFlag {
-            fmt.Println("PUSH flag is set")
-            // PUSHフラグ送信ロジックを追加
+            fmt.Println("[PUSH flag set]")
+            // PUSHフラグ送信ロジックをここに追加
         }
+
+        time.Sleep(1 * time.Second) // 1秒待機
     }
 
-    // RTTの統計情報を計算
+    // 統計情報の表示
+    fmt.Println("\n---", host, "ping statistics ---")
+    fmt.Printf("%d packets transmitted, %d received, %.1f%% packet loss\n",
+        packetsSent, packetsReceived, float64(packetsSent-packetsReceived)/float64(packetsSent)*100)
+
     if len(rttTimes) > 0 {
         minRTT, maxRTT, avgRTT := calculateRTTStats(rttTimes)
-        fmt.Printf("Min RTT: %v, Max RTT: %v, Avg RTT: %v\n", minRTT, maxRTT, avgRTT)
+        fmt.Printf("rtt min/avg/max = %.2f/%.2f/%.2f ms\n", float64(minRTT.Milliseconds()), float64(avgRTT.Milliseconds()), float64(maxRTT.Milliseconds()))
     }
 }
 
