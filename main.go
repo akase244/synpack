@@ -4,55 +4,60 @@ import (
     "flag"
     "fmt"
     "net"
+    "os"
     "time"
 )
 
 func main() {
-    // 引数としてホスト、ポート、回数、TCPフラグを指定
-    host := flag.String("host", "example.com", "Target host")
-    port := flag.String("port", "80", "Target port")
+    // コマンドライン引数を設定 (nping, hping3風)
     count := flag.Int("c", 5, "Number of packets to send")
-    synFlag := flag.Bool("syn", false, "Send SYN flag")
-    ackFlag := flag.Bool("ack", false, "Send ACK flag")
-    pushFlag := flag.Bool("push", false, "Send PUSH flag")
-    flag.Parse()
+    port := flag.Int("p", 80, "Target port")
+    synFlag := flag.Bool("S", false, "Set SYN flag")
+    ackFlag := flag.Bool("A", false, "Set ACK flag")
+    pushFlag := flag.Bool("P", false, "Set PUSH flag")
 
-    // TCPフラグの設定を確認
-    fmt.Printf("Host: %s, Port: %s, Count: %d\n", *host, *port, *count)
+    // ホスト名は最後の引数として取得
+    flag.Parse()
+    if len(flag.Args()) < 1 {
+        fmt.Println("Error: Host must be specified")
+        os.Exit(1)
+    }
+    host := flag.Args()[0]
+
+    // オプションの確認
+    fmt.Printf("Host: %s, Port: %d, Count: %d\n", host, *port, *count)
     fmt.Printf("Flags - SYN: %t, ACK: %t, PUSH: %t\n", *synFlag, *ackFlag, *pushFlag)
 
+    // RTT計測
     var rttTimes []time.Duration
-
     for i := 0; i < *count; i++ {
         start := time.Now()
 
-        conn, err := net.Dial("tcp", *host+":"+*port)
+        conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", host, *port))
         if err != nil {
             fmt.Println("Error:", err)
             continue
         }
         defer conn.Close()
 
-        // RTTを計測
+        // RTTの計測
         rtt := time.Since(start)
         fmt.Printf("RTT: %v\n", rtt)
         rttTimes = append(rttTimes, rtt)
 
-        // Optional: TCPフラグを設定
+        // TCPフラグの設定 (Raw socket等で拡張可能)
         if *synFlag {
-            fmt.Println("Sending SYN flag")
-            // SYNフラグ送信処理を追加
+            fmt.Println("SYN flag is set")
+            // SYNフラグ送信ロジックを追加
         }
         if *ackFlag {
-            fmt.Println("Sending ACK flag")
-            // ACKフラグ送信処理を追加
+            fmt.Println("ACK flag is set")
+            // ACKフラグ送信ロジックを追加
         }
         if *pushFlag {
-            fmt.Println("Sending PUSH flag")
-            // PUSHフラグ送信処理を追加
+            fmt.Println("PUSH flag is set")
+            // PUSHフラグ送信ロジックを追加
         }
-
-        // 必要であれば応答の確認や詳細な処理を追加
     }
 
     // RTTの統計情報を計算
@@ -62,7 +67,7 @@ func main() {
     }
 }
 
-// RTTの統計情報を計算する関数
+// RTT統計情報の計算
 func calculateRTTStats(times []time.Duration) (min, max, avg time.Duration) {
     min, max = times[0], times[0]
     var sum time.Duration
