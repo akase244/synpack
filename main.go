@@ -47,17 +47,24 @@ func main() {
         return
     }
 
+    // ソケットを作成し、使い回し可能にする
+    fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_TCP)
+    if err != nil {
+        fmt.Printf("Error creating socket: %v\n", err)
+        return
+    }
+    defer syscall.Close(fd)
+
     for i := 0; i < *count; i++ {
         packetsSent++
         seqNum := rand.Intn(10000) // シーケンス番号のランダム生成
 
         start := time.Now()
-        conn, err := sendTCPPacket(ipAddr.IP, *port, *srcPort, seqNum, *synFlag, *ackFlag, *pushFlag)
+        err := sendTCPPacket(fd, ipAddr.IP, *port, *srcPort, seqNum, *synFlag, *ackFlag, *pushFlag)
         if err != nil {
             fmt.Printf("Request timeout for icmp_seq %d\n", i+1)
             continue
         }
-        defer conn.Close()
 
         rtt := time.Since(start)
         rttTimes = append(rttTimes, rtt)
@@ -79,45 +86,29 @@ func main() {
     }
 }
 
-// TCPパケットを送信し、ソケット接続を返す
-func sendTCPPacket(dstIP net.IP, dstPort, srcPort, seqNum int, syn, ack, push bool) (net.Conn, error) {
-    // ソケットの作成
-    fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_TCP)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create raw socket: %v", err)
-    }
-    defer syscall.Close(fd)
-
+// TCPパケットを送信する
+func sendTCPPacket(fd int, dstIP net.IP, dstPort, srcPort, seqNum int, syn, ack, push bool) error {
     // 送信先アドレスの設定
     addr := syscall.SockaddrInet4{
         Port: dstPort,
     }
     copy(addr.Addr[:], dstIP.To4())
 
-    // パケットの組み立て (ここでシーケンス番号とフラグを指定)
+    // パケットの組み立て (シーケンス番号とフラグを設定)
     packet := createTCPPacket(srcPort, dstPort, seqNum, syn, ack, push)
 
     // パケットの送信
-    err = syscall.Sendto(fd, packet, 0, &addr)
+    err := syscall.Sendto(fd, packet, 0, &addr)
     if err != nil {
-        return nil, fmt.Errorf("failed to send packet: %v", err)
+        return fmt.Errorf("failed to send packet: %v", err)
     }
 
-    // TCP接続の確認（シーケンス番号や応答を後で追加処理）
-    conn, err := net.DialTCP("tcp", &net.TCPAddr{Port: srcPort}, &net.TCPAddr{IP: dstIP, Port: dstPort})
-    if err != nil {
-        return nil, fmt.Errorf("failed to establish connection: %v", err)
-    }
-
-    return conn, nil
+    return nil
 }
 
 // TCPパケットの生成
 func createTCPPacket(srcPort, dstPort, seqNum int, syn, ack, push bool) []byte {
     // TCPヘッダやフラグを作成 (実際のフラグ設定処理はここで行う)
-    // 必要に応じて、TCPヘッダを低レベルで構築する
-
-    // ここでは仮にパケットのバイトスライスを返している
     packet := make([]byte, 20) // TCPヘッダ20バイトを生成
     return packet
 }
