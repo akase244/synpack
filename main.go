@@ -108,8 +108,54 @@ func sendTCPPacket(fd int, dstIP net.IP, dstPort, srcPort, seqNum int, syn, ack,
 
 // TCPパケットの生成
 func createTCPPacket(srcPort, dstPort, seqNum int, syn, ack, push bool) []byte {
-    // TCPヘッダやフラグを作成 (実際のフラグ設定処理はここで行う)
-    packet := make([]byte, 20) // TCPヘッダ20バイトを生成
+    packet := make([]byte, 20) // TCPヘッダーサイズ
+
+    // ソースポート
+    packet[0] = byte(srcPort >> 8)
+    packet[1] = byte(srcPort)
+
+    // デスティネーションポート
+    packet[2] = byte(dstPort >> 8)
+    packet[3] = byte(dstPort)
+
+    // シーケンス番号
+    packet[4] = byte(seqNum >> 24)
+    packet[5] = byte(seqNum >> 16)
+    packet[6] = byte(seqNum >> 8)
+    packet[7] = byte(seqNum)
+
+    // 確認応答番号（通常は0）
+    packet[8] = 0
+    packet[9] = 0
+    packet[10] = 0
+    packet[11] = 0
+
+    // データオフセット + フラグ + ウィンドウサイズ
+    packet[12] = 5 << 4 // データオフセット
+    flags := 0
+    if syn {
+        flags |= 0x02 // SYNフラグ
+    }
+    if ack {
+        flags |= 0x10 // ACKフラグ
+    }
+    if push {
+        flags |= 0x08 // PUSHフラグ
+    }
+    packet[13] = byte(flags) // TCPフラグ
+
+    // ウィンドウサイズ
+    packet[14] = 0
+    packet[15] = 0
+
+    // チェックサム（ここでは0を仮設定）
+    packet[16] = 0
+    packet[17] = 0
+
+    // 緊急ポインタ（仮に0）
+    packet[18] = 0
+    packet[19] = 0
+
     return packet
 }
 
