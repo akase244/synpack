@@ -1,23 +1,29 @@
-package synpack
+package main
 
 import (
 	"encoding/binary"
-	"fmt"
 	"flag"
+	"fmt"
+	"math/rand"
 	"net"
 	"os"
-	"syscall"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
-	"math/rand"
 )
 
 func main() {
 	// 引数を取得
 	argHost := flag.String("host", "www.yahoo.co.jp", "送信先のホスト名")
 	argPort := flag.Int("port", 443, "送信先のポート番号")
-	argCount := flag.Int("c", 1, "実行回数")
+	argCount := flag.Int("c", 0, "実行回数")
 	flag.Parse()
+
+	// シグナル受信設定
+	signalChan := make(chan os.Signal, 1)
+	// [ctrl+c]をキャッチする
+	signal.Notify(signalChan, os.Interrupt)
 
 	// 送信先ホスト名
 	destinationHost := *argHost
@@ -26,19 +32,24 @@ func main() {
 	// 実行回数
 	count := *argCount
 
-	if count <= 0 {
+	if count < 0 {
 		fmt.Println("実行回数は1以上に設定してください")
 		os.Exit(1)
 	}
 
 	// ローカルIPアドレス
-	localIpAddress := getLocalIpAddress()
-	if localIpAddress == "" {
-		fmt.Println("ローカルで有効なIPアドレスを取得できません")
+	localInterfaceName, localIpAddress := getLocalInterface()
+	if localInterfaceName == "" || localIpAddress == "" {
+		fmt.Println("ローカルで有効なインタフェースを取得できません")
 		os.Exit(1)
 	}
+
+	// 送信元インターフェース名
+	sourceInterfaceName := localInterfaceName
+
 	// 送信元IPアドレス
 	sourceIpAddress := net.ParseIP(localIpAddress)
+
 	// 送信先ホスト名から送信先IPアドレスを取得
 	targetIpAddress := getTargetIpAddress(destinationHost)
 	if targetIpAddress == "" {
@@ -50,7 +61,26 @@ func main() {
 	// 実行結果を記録
 	var rtts []time.Duration
 
-	for i := 0; i < count; i++ {
+	shouldExit := false
+	go func() {
+		<-signalChan // ctrl+cが押されるまで待機
+		shouldExit = true
+	}()
+
+	fmt.Printf("Synpack %s (%s) -> %s (%s)\n", sourceInterfaceName, sourceIpAddress, destinationHost, destinationIpAddress)
+	executionCount := 0
+	receivedCount := 0
+	for {
+		if count > 0 && executionCount >= count {
+			break
+		}
+		if shouldExit {
+			break
+		}
+
+		// 実行回数をインクリメント
+		executionCount++
+
 		// 送信元ポート番号（毎実行時にポート番号を変える）
 		sourcePort := generateAvailablePort()
 		if sourcePort == 0 {
@@ -61,12 +91,6 @@ func main() {
 		// シーケンス番号をランダムに取得
 		rand.Seed(time.Now().UnixNano())
 		seqNumber := rand.Uint32()
-
-		fmt.Println("送信元IPアドレス:", sourceIpAddress)
-		fmt.Println("送信元ポート番号:", sourcePort)
-		fmt.Println("送信先IPアドレス:", destinationIpAddress)
-		fmt.Println("送信先ポート番号:", destinationPort)
-		fmt.Println("シーケンス番号:", seqNumber)
 
 		// ソケットを作成
 		// - アドレスファミリー:IPv4
@@ -100,7 +124,6 @@ func main() {
 			fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
-		fmt.Println("SYNパケットを送信しました")
 
 		// SYN-ACKパケットを受信
 		buf := make([]byte, 4096)
@@ -113,13 +136,16 @@ func main() {
 
 			// 受信パケットを解析
 			if err := parseAndVerifyPacket(buf[:n], sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber); err == nil {
+				// SYN-ACK確認成功
+				receivedCount++
 				rtt := time.Since(start)
 				rtts = append(rtts, rtt)
-				fmt.Printf("%d回目: RTT = %v\n", i+1, rtt)
-				// SYN-ACK確認成功
+				fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%v\n", len(buf), destinationIpAddress, destinationPort, seqNumber, rtt)
 				break
 			}
 		}
+
+		time.Sleep(1 * time.Second)
 	}
 
 	// RTT結果を表示
@@ -134,10 +160,11 @@ func main() {
 			}
 			sumRTT += rtt
 		}
-		fmt.Printf("\n--- 結果 ---\n")
-		fmt.Printf("最小RTT: %v\n", minRTT)
-		fmt.Printf("最大RTT: %v\n", maxRTT)
-		fmt.Printf("平均RTT: %v\n", sumRTT/time.Duration(len(rtts)))
+		fmt.Printf("\n--- %s Synpack statistic ---\n", destinationHost)
+		fmt.Printf("%d packets transmitted, %d packets received, %.2f%% packet loss\n",
+			count, receivedCount,
+			(float64(count-receivedCount)/float64(count))*100)
+		fmt.Printf("round-trip min/avg/max = %v/%v/%v\n", minRTT, maxRTT, sumRTT/time.Duration(len(rtts)))
 	} else {
 		fmt.Println("RTTを計測できませんでした")
 	}
@@ -223,8 +250,8 @@ func parseAndVerifyPacket(buf []byte, sourceIpAddress, destinationIpAddress net.
 	ackNumberRecv := binary.BigEndian.Uint32(tcpHeader[8:12]) // 8バイト目から
 
 	if ackNumberRecv == seqNumberSent+1 && sourcePortRecv == destinationPort && destinationPortRecv == sourcePort && (flags&0x12) == 0x12 {
-		fmt.Printf("SYN-ACKを受信しました: %s:%d -> %s:%d\n", sourceIp, sourcePortRecv, destinationIp, destinationPortRecv)
-		fmt.Println("ACK番号:", ackNumberRecv)
+		//fmt.Printf("SYN-ACKを受信しました: %s:%d -> %s:%d\n", sourceIp, sourcePortRecv, destinationIp, destinationPortRecv)
+		//fmt.Println("ACK番号:", ackNumberRecv)
 		return nil
 	}
 
@@ -246,12 +273,12 @@ func calcChecksum(data []byte) uint16 {
 	return ^uint16(sum)
 }
 
-// ローカル環境のネットワークインターフェースからIPアドレスを取得
-func getLocalIpAddress() string {
+// ローカル環境のネットワークインターフェースからインタフェース名とIPアドレスを取得
+func getLocalInterface() (string, string) {
 	// インターフェースを取得
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return ""
+		return "",""
 	}
 
 	for _, iface := range interfaces {
@@ -282,10 +309,10 @@ func getLocalIpAddress() string {
 			if ip == nil || ip.IsLoopback() || !ip.IsGlobalUnicast() || ip.To4() == nil {
 				continue
 			}
-			return ip.String()
+			return iface.Name, ip.String()
 		}
 	}
-	return ""
+	return "",""
 }
 
 // Docker関連のインターフェース名か判定する
