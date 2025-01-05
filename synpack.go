@@ -333,7 +333,7 @@ func getLocalInterface() (string, string) {
 // Docker関連のインターフェース名か判定する
 func hasDockerInterfaceName(name string) bool {
 	// Dockerで使われる典型的なインターフェース名
-	dockerPrefixes := []string{"docker", "br-", "veth", "tunl", "flannel"}
+	dockerPrefixes := []string{"docker", "br-", "veth", "tunl", "flannel", "cni"}
 
 	for _, prefix := range dockerPrefixes {
 		if strings.HasPrefix(name, prefix) {
