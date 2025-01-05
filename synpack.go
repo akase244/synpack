@@ -104,8 +104,8 @@ func main() {
 		}
 
 		// シーケンス番号をランダムに取得
-		rand.Seed(time.Now().UnixNano())
-		seqNumber := rand.Uint32()
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		seqNumber := r.Uint32()
 
 		// ソケットを作成
 		// - アドレスファミリー:IPv4
@@ -348,8 +348,8 @@ func generateAvailablePort() int {
 	retryCount := 10
 	for i := 0; i < retryCount; i++ {
 		// ポート番号をランダムに取得
-		rand.Seed(time.Now().UnixNano())
-		port := rand.Intn(65535-49152+1) + 49152
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		port := r.Intn(65535-49152+1) + 49152
 		// ポートが空いているか確認
 		if isAvailablePort(port) {
 			return port
