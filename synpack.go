@@ -15,8 +15,8 @@ import (
 
 func main() {
 	// 引数を取得
-	argHost := flag.String("h", "github.com", "送信先のホスト名")
-	argPort := flag.Int("p", 443, "送信先のポート番号")
+	argHost := flag.String("h", "", "送信先のホスト名(必須)")
+	argPort := flag.Int("p", 0, "送信先のポート番号(必須:0-65535)")
 	argCount := flag.Int("c", 0, "実行回数")
 	flag.Parse()
 
@@ -25,17 +25,32 @@ func main() {
 	// [ctrl+c]をキャッチする
 	signal.Notify(signalChan, os.Interrupt)
 
+	// 送信先ホスト名の必須チェック
+	if *argHost == "" {
+		fmt.Fprintln(os.Stderr, "送信先ホスト名(-h)は必須です")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	// 送信先ポート番号の妥当性チェック
+	if *argPort < 0 || *argPort > 65535 {
+		fmt.Fprintln(os.Stderr, "送信先ポート番号(-p)は1〜65535の範囲で指定してください")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	// 実行回数の妥当性チェック
+	if *argCount < 0 {
+		fmt.Fprintln(os.Stderr, "実行回数は1以上を指定してください")
+		os.Exit(1)
+	}
+
 	// 送信先ホスト名
 	destinationHost := *argHost
 	// 送信先ポート番号
 	destinationPort := *argPort
 	// 実行回数
-	count := *argCount
-
-	if count < 0 {
-		fmt.Println("実行回数は1以上に設定してください")
-		os.Exit(1)
-	}
+	retryCount := *argCount
 
 	// ローカルIPアドレス
 	localInterfaceName, localIpAddress := getLocalInterface()
@@ -71,7 +86,7 @@ func main() {
 	executionCount := 0
 	receivedCount := 0
 	for {
-		if count > 0 && executionCount >= count {
+		if retryCount > 0 && executionCount >= retryCount {
 			break
 		}
 		if shouldExit {
@@ -162,8 +177,8 @@ func main() {
 		}
 		fmt.Printf("\n--- %s Synpack statistic ---\n", destinationHost)
 		fmt.Printf("%d packets transmitted, %d packets received, %.2f%% packet loss\n",
-			count, receivedCount,
-			(float64(count-receivedCount)/float64(count))*100)
+			retryCount, receivedCount,
+			(float64(retryCount-receivedCount)/float64(retryCount))*100)
 		fmt.Printf("round-trip min/avg/max = %v/%v/%v\n", minRTT, maxRTT, sumRTT/time.Duration(len(rtts)))
 	} else {
 		fmt.Println("RTTを計測できませんでした")
