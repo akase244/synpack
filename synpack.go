@@ -301,7 +301,7 @@ func getLocalInterface() (string, string) {
 		// - 無効状態
 		// - ループバックアドレス
 		// - インターフェース名がDocker関連
-		if (iface.Flags&net.FlagUp) == 0 || (iface.Flags&net.FlagLoopback) != 0 || isDockerInterface(iface.Name) {
+		if (iface.Flags&net.FlagUp) == 0 || (iface.Flags&net.FlagLoopback) != 0 || hasDockerInterfaceName(iface.Name) {
 			continue
 		}
 
@@ -331,7 +331,7 @@ func getLocalInterface() (string, string) {
 }
 
 // Docker関連のインターフェース名か判定する
-func isDockerInterface(name string) bool {
+func hasDockerInterfaceName(name string) bool {
 	// Dockerで使われる典型的なインターフェース名
 	dockerPrefixes := []string{"docker", "br-", "veth", "tunl", "flannel"}
 
