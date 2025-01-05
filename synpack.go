@@ -15,8 +15,8 @@ import (
 
 func main() {
 	// 引数を取得
-	argHost := flag.String("host", "www.yahoo.co.jp", "送信先のホスト名")
-	argPort := flag.Int("port", 443, "送信先のポート番号")
+	argHost := flag.String("h", "github.com", "送信先のホスト名")
+	argPort := flag.Int("p", 443, "送信先のポート番号")
 	argCount := flag.Int("c", 0, "実行回数")
 	flag.Parse()
 
@@ -180,13 +180,13 @@ func createSynPacket(sourceIpAddress, destinationIpAddress net.IP, sourcePort, d
 // IPヘッダーを生成
 func createIpHeader(sourceIpAddress, destinationIpAddress net.IP) []byte {
 	header := make([]byte, 20)
-	header[0] = 0x45 // バージョン(4) + ヘッダー長(5)
-	header[1] = 0x00 // サービスタイプ
+	header[0] = 0x45                  // バージョン(4) + ヘッダー長(5)
+	header[1] = 0x00                  // サービスタイプ
 	header[2], header[3] = 0x00, 0x28 // 全長 (40バイト)
 	header[4], header[5] = 0x00, 0x00 // 識別子
 	header[6], header[7] = 0x40, 0x00 // フラグメントオフセット
-	header[8] = 0x40 // TTL
-	header[9] = syscall.IPPROTO_TCP // プロトコル
+	header[8] = 0x40                  // TTL
+	header[9] = syscall.IPPROTO_TCP   // プロトコル
 	copy(header[12:16], sourceIpAddress.To4())
 	copy(header[16:20], destinationIpAddress.To4())
 
@@ -202,8 +202,8 @@ func createTcpHeader(sourceIpAddress, destinationIpAddress net.IP, sourcePort, d
 	binary.BigEndian.PutUint16(header[0:2], uint16(sourcePort))
 	binary.BigEndian.PutUint16(header[2:4], uint16(destinationPort))
 	binary.BigEndian.PutUint32(header[4:8], seqNumber)
-	header[12] = 0x50 // ヘッダー長(5)
-	header[13] = 0x02 // SYNフラグ
+	header[12] = 0x50                   // ヘッダー長(5)
+	header[13] = 0x02                   // SYNフラグ
 	header[14], header[15] = 0x72, 0x10 // ウィンドウサイズ
 
 	// チェックサム計算
@@ -278,7 +278,7 @@ func getLocalInterface() (string, string) {
 	// インターフェースを取得
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return "",""
+		return "", ""
 	}
 
 	for _, iface := range interfaces {
@@ -286,7 +286,7 @@ func getLocalInterface() (string, string) {
 		// - 無効状態
 		// - ループバックアドレス
 		// - インターフェース名がDocker関連
-		if (iface.Flags & net.FlagUp) == 0 || (iface.Flags & net.FlagLoopback) != 0 || isDockerInterface(iface.Name) {
+		if (iface.Flags&net.FlagUp) == 0 || (iface.Flags&net.FlagLoopback) != 0 || isDockerInterface(iface.Name) {
 			continue
 		}
 
@@ -312,7 +312,7 @@ func getLocalInterface() (string, string) {
 			return iface.Name, ip.String()
 		}
 	}
-	return "",""
+	return "", ""
 }
 
 // Docker関連のインターフェース名か判定する

@@ -6,7 +6,7 @@ Its name is derived from the Japanese word "心拍" (shinpaku), meaning "heartbe
 
 ```
 $ go build -o synpack
-$ sudo ./synpack -host github.com -port 80 -c 3
+$ sudo ./synpack -h github.com -p 80 -c 3
 Synpack eth0 (192.168.0.1) -> github.com (20.27.177.113)
 len=4096 ip=20.27.177.113 port=80 seq=3884279077 rtt=81.550847ms
 len=4096 ip=20.27.177.113 port=80 seq=2575736597 rtt=81.027256ms
