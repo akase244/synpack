@@ -147,28 +147,49 @@ func main() {
 
 		// SYN-ACKパケットを受信
 		buf := make([]byte, 4096)
-		for {
-			n, _, err := syscall.Recvfrom(fd, buf, 0)
-			if err != nil {
-				fmt.Println("syscall.Recvfrom実行時にエラーが発生しました", err)
-				os.Exit(1)
-			}
 
+		// タイムアウトの設定
+		timeout := 3 * time.Second
+
+		// チャネルを使ってタイムアウトと受信を監視
+		timeoutChannel := time.After(timeout)
+		receiveChannel := make(chan []byte)
+
+		go func() {
+			for {
+				n, _, err := syscall.Recvfrom(fd, buf, 0)
+				if err != nil {
+					fmt.Println("syscall.Recvfrom実行時にエラーが発生しました", err)
+					os.Exit(1)
+				}
+
+				// データ受信時にチャネルに送る
+				receiveChannel <- buf[:n]
+			}
+		}()
+
+		select {
+		case receivedPacket := <-receiveChannel:
 			// 受信パケットを解析
-			if err := parseAndVerifyPacket(buf[:n], sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber); err == nil {
+			if err := parseAndVerifyPacket(receivedPacket, sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber); err == nil {
 				// SYN-ACK確認成功
 				receivedCount++
 				rtt := time.Since(start)
 				rtts = append(rtts, rtt)
 				fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%v\n", len(buf), destinationIpAddress, destinationPort, seqNumber, rtt)
-				break
 			}
+		case <-timeoutChannel:
+			// 何もしない
 		}
 
 		time.Sleep(1 * time.Second)
 	}
 
 	// RTT結果を表示
+	fmt.Printf("\n--- %s Synpack statistic ---\n", destinationHost)
+	fmt.Printf("%d packets transmitted, %d packets received, %.2f%% packet loss\n",
+		retryCount, receivedCount,
+		(float64(retryCount-receivedCount)/float64(retryCount))*100)
 	if len(rtts) > 0 {
 		minRTT, maxRTT, sumRTT := rtts[0], rtts[0], time.Duration(0)
 		for _, rtt := range rtts {
@@ -180,13 +201,9 @@ func main() {
 			}
 			sumRTT += rtt
 		}
-		fmt.Printf("\n--- %s Synpack statistic ---\n", destinationHost)
-		fmt.Printf("%d packets transmitted, %d packets received, %.2f%% packet loss\n",
-			retryCount, receivedCount,
-			(float64(retryCount-receivedCount)/float64(retryCount))*100)
-		fmt.Printf("round-trip min/avg/max = %v/%v/%v\n", minRTT, maxRTT, sumRTT/time.Duration(len(rtts)))
+		fmt.Printf("round-trip min/avg/max = %v/%v/%v\n", minRTT, sumRTT/time.Duration(len(rtts)), maxRTT)
 	} else {
-		fmt.Println("RTTを計測できませんでした")
+		fmt.Printf("round-trip min/avg/max = 0.0/0.0/0.0\n")
 	}
 }
 
