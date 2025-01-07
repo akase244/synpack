@@ -208,14 +208,14 @@ func main() {
 }
 
 // SYNパケットを生成
-func createSynPacket(sourceIpAddress, destinationIpAddress net.IP, sourcePort, destinationPort int, seqNumber uint32) []byte {
+func createSynPacket(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32) []byte {
 	ipHeader := createIpHeader(sourceIpAddress, destinationIpAddress)
 	tcpHeader := createTcpHeader(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
 	return append(ipHeader, tcpHeader...)
 }
 
 // IPヘッダーを生成
-func createIpHeader(sourceIpAddress, destinationIpAddress net.IP) []byte {
+func createIpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP) []byte {
 	header := make([]byte, 20)
 	header[0] = 0x45                  // バージョン(4) + ヘッダー長(5)
 	header[1] = 0x00                  // サービスタイプ
@@ -234,7 +234,7 @@ func createIpHeader(sourceIpAddress, destinationIpAddress net.IP) []byte {
 }
 
 // TCPヘッダーを生成
-func createTcpHeader(sourceIpAddress, destinationIpAddress net.IP, sourcePort, destinationPort int, seqNumber uint32) []byte {
+func createTcpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32) []byte {
 	header := make([]byte, 20)
 	binary.BigEndian.PutUint16(header[0:2], uint16(sourcePort))
 	binary.BigEndian.PutUint16(header[2:4], uint16(destinationPort))
@@ -251,7 +251,7 @@ func createTcpHeader(sourceIpAddress, destinationIpAddress net.IP, sourcePort, d
 }
 
 // 疑似ヘッダーを生成
-func createPseudoHeader(sourceIpAddress, destinationIpAddress net.IP, tcpHeader []byte) []byte {
+func createPseudoHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, tcpHeader []byte) []byte {
 	pseudoHeader := make([]byte, 12+len(tcpHeader))
 	copy(pseudoHeader[0:4], sourceIpAddress.To4())
 	copy(pseudoHeader[4:8], destinationIpAddress.To4())
@@ -263,7 +263,7 @@ func createPseudoHeader(sourceIpAddress, destinationIpAddress net.IP, tcpHeader 
 }
 
 // パケットを解析してSYN-ACKを確認
-func parseAndVerifyPacket(buf []byte, sourceIpAddress, destinationIpAddress net.IP, sourcePort, destinationPort int, seqNumberSent uint32) error {
+func parseAndVerifyPacket(buf []byte, sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumberSent uint32) error {
 	if len(buf) < 40 {
 		return fmt.Errorf("パケットが短すぎます")
 	}
