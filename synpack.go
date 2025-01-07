@@ -1,10 +1,11 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"net"
 	"os"
 	"os/signal"
@@ -104,8 +105,12 @@ func main() {
 		}
 
 		// シーケンス番号をランダムに取得
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		seqNumber := r.Uint32()
+		n, err := rand.Int(rand.Reader, big.NewInt(1<<32))
+		if err != nil {
+			fmt.Println("シーケンス番号の採番に失敗しました")
+			os.Exit(1)
+		}
+		seqNumber := uint32(n.Int64())
 
 		// ソケットを作成
 		// - アドレスファミリー:IPv4
@@ -345,11 +350,18 @@ func hasDockerInterfaceName(name string) bool {
 
 // ローカルで利用可能なポート番号を取得
 func generateAvailablePort() int {
-	retryCount := 10
+	// 再実行の回数
+	retryCount := 5
+	// ポート番号の範囲
+	minPort := 49152
+	maxPort := 65535
 	for i := 0; i < retryCount; i++ {
 		// ポート番号をランダムに取得
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		port := r.Intn(65535-49152+1) + 49152
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(maxPort-minPort+1)))
+		if err != nil {
+			return 0
+		}
+		port := int(n.Int64()) + minPort
 		// ポートが空いているか確認
 		if isAvailablePort(port) {
 			return port
