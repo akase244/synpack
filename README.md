@@ -14,5 +14,5 @@ len=4096 ip=20.27.177.113 port=80 seq=3729930979 rtt=77.739979ms
 
 --- github.com Synpack statistic ---
 3 packets transmitted, 3 packets received, 0.00% packet loss
-round-trip min/avg/max = 77.739979ms/81.550847ms/80.106027ms
+round-trip min/avg/max = 77.739979ms/80.106027ms/81.550847ms
 ```
