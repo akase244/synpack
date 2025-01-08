@@ -96,9 +96,6 @@ func main() {
 			break
 		}
 
-		// 実行回数をインクリメント
-		executedCount++
-
 		// 送信元ポート番号（毎実行時にポート番号を変える）
 		sourcePort := generateAvailablePort()
 		if sourcePort == 0 {
@@ -173,6 +170,7 @@ func main() {
 						os.Exit(1)
 					}
 
+					receivedCount++
 					// データ受信時にチャネルに送る
 					receiveChannel <- buf[:n]
 				}
@@ -182,7 +180,6 @@ func main() {
 			case receivedPacket := <-receiveChannel:
 				if len(receivedPacket) < 40 {
 					// パケットが短すぎるのでリトライ
-					receivedCount++
 					continue
 				}
 
@@ -201,7 +198,6 @@ func main() {
 					sourcePort != receivedDestinationPort ||
 					destinationPort != receivedSourcePort {
 					// 不一致の場合は関係ないパケットなのでリトライ
-					receivedCount++
 					continue
 				}
 
@@ -236,6 +232,9 @@ func main() {
 		}
 		// 送信先に負荷を掛けないように次の実行まで待機
 		time.Sleep(500 * time.Millisecond)
+
+		// 実行回数をインクリメント
+		executedCount++
 	}
 
 	// RTT結果を表示
