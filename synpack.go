@@ -179,7 +179,7 @@ func main() {
 				receivedCount++
 				rtt := time.Since(start)
 				rtts = append(rtts, rtt)
-				fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%v\n", len(buf), destinationIpAddress, destinationPort, seqNumber, rtt)
+				fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%.2fms\n", len(buf), destinationIpAddress, destinationPort, seqNumber, float64(rtt.Microseconds())/1000)
 
 				// ACK番号を取得
 				tcpHeader := receivedPacket[20:40]
@@ -218,7 +218,10 @@ func main() {
 			}
 			sumRTT += rtt
 		}
-		fmt.Printf("round-trip min/avg/max = %v/%v/%v\n", minRTT, sumRTT/time.Duration(len(rtts)), maxRTT)
+		fmt.Printf("round-trip min/avg/max = %.2fms/%.2fms/%.2fms\n",
+			float64(minRTT.Microseconds())/1000,
+			float64(sumRTT.Microseconds())/float64(len(rtts))/1000,
+			float64(maxRTT.Microseconds())/1000)
 	} else {
 		fmt.Printf("round-trip min/avg/max = 0.0/0.0/0.0\n")
 	}
