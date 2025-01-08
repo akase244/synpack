@@ -83,24 +83,6 @@ func main() {
 		shouldExit = true
 	}()
 
-	// ソケットを作成
-	// - アドレスファミリー:IPv4
-	// - ソケットの種類:低レベルソケット
-	// - プロトコル:TCP
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_TCP)
-	if err != nil {
-		fmt.Println("syscall.Socket実行時にエラーが発生しました", err)
-		os.Exit(1)
-	}
-	defer syscall.Close(fd)
-
-	// ソケットオプションでIPヘッダーを手動生成に設定
-	err = syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1)
-	if err != nil {
-		fmt.Println("syscall.SetsockoptInt実行時にエラーが発生しました", err)
-		os.Exit(1)
-	}
-
 	fmt.Printf("Synpack %s (%s) -> %s (%s)\n", sourceInterfaceName, sourceIpAddress, destinationHost, destinationIpAddress)
 	executedCount := 0
 	successReceivedCount := 0
@@ -131,6 +113,24 @@ func main() {
 			os.Exit(1)
 		}
 		seqNumber := uint32(n.Int64())
+
+		// ソケットを作成
+		// - アドレスファミリー:IPv4
+		// - ソケットの種類:低レベルソケット
+		// - プロトコル:TCP
+		fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_TCP)
+		if err != nil {
+			fmt.Println("syscall.Socket実行時にエラーが発生しました", err)
+			os.Exit(1)
+		}
+		defer syscall.Close(fd)
+
+		// ソケットオプションでIPヘッダーを手動生成に設定
+		err = syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1)
+		if err != nil {
+			fmt.Println("syscall.SetsockoptInt実行時にエラーが発生しました", err)
+			os.Exit(1)
+		}
 
 		// SYNパケットを生成
 		packet := createSynPacket(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
