@@ -181,7 +181,9 @@ func main() {
 			select {
 			case receivedPacket := <-receiveChannel:
 				if len(receivedPacket) < 40 {
-					fmt.Println("パケットが短すぎます")
+					// パケットが短すぎるのでリトライ
+					receivedCount++
+					continue
 				}
 
 				tcpHeader := receivedPacket[20:40]
