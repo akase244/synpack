@@ -231,7 +231,7 @@ func main() {
 			}
 		}
 		// 送信先に負荷を掛けないように次の実行まで待機
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 
 		// 実行回数をインクリメント
 		executedCount++
