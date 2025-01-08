@@ -231,7 +231,7 @@ func main() {
 					fmt.Println("parsePacket実行時にエラーが発生しました", err)
 				}
 			case <-timeoutChannel:
-				// 何もしない
+				break
 			}
 		}
 		// 送信先に負荷を掛けないように次の実行まで待機
