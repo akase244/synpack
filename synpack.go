@@ -51,7 +51,7 @@ func main() {
 	// 送信先ポート番号
 	destinationPort := *argPort
 	// 実行回数
-	retryCount := *argCount
+	maxExecutionCount := *argCount
 
 	// ローカルIPアドレス
 	localInterfaceName, localIpAddress := getLocalInterface()
@@ -84,18 +84,20 @@ func main() {
 	}()
 
 	fmt.Printf("Synpack %s (%s) -> %s (%s)\n", sourceInterfaceName, sourceIpAddress, destinationHost, destinationIpAddress)
-	executionCount := 0
-	receivedCount := 0
+	executedCount := 0
+	successReceivedCount := 0
 	for {
-		if retryCount > 0 && executionCount >= retryCount {
+		// 引数で指定された実行回数を超えるまで処理を繰り返す
+		if maxExecutionCount > 0 && executedCount >= maxExecutionCount {
 			break
 		}
+		// ctrl+cが押されたら処理を停止する
 		if shouldExit {
 			break
 		}
 
 		// 実行回数をインクリメント
-		executionCount++
+		executedCount++
 
 		// 送信元ポート番号（毎実行時にポート番号を変える）
 		sourcePort := generateAvailablePort()
@@ -150,63 +152,106 @@ func main() {
 		// SYN-ACKパケットを受信
 		buf := make([]byte, 4096)
 
-		// タイムアウトの設定
-		timeout := 3 * time.Second
+		// タイムアウトの設定(0.5秒)
+		timeout := 500 * time.Millisecond
 
-		// チャネルを使ってタイムアウトと受信を監視
-		timeoutChannel := time.After(timeout)
-		receiveChannel := make(chan []byte)
+		// 受信処理の最大回数
+		maxReceivedCount := 5
+		// 受信処理の実行回数
+		receivedCount := 0
 
-		go func() {
-			for {
-				n, _, err := syscall.Recvfrom(fd, buf, 0)
-				if err != nil {
-					fmt.Println("syscall.Recvfrom実行時にエラーが発生しました", err)
-					os.Exit(1)
+		for receivedCount < maxReceivedCount {
+			// チャネルを使ってタイムアウトと受信を監視
+			timeoutChannel := time.After(timeout)
+			receiveChannel := make(chan []byte)
+
+			go func() {
+				for {
+					n, _, err := syscall.Recvfrom(fd, buf, 0)
+					if err != nil {
+						fmt.Println("syscall.Recvfrom実行時にエラーが発生しました", err)
+						os.Exit(1)
+					}
+
+					// データ受信時にチャネルに送る
+					receiveChannel <- buf[:n]
+				}
+			}()
+
+			select {
+			case receivedPacket := <-receiveChannel:
+				if len(receivedPacket) < 40 {
+					fmt.Println("パケットが短すぎます")
 				}
 
-				// データ受信時にチャネルに送る
-				receiveChannel <- buf[:n]
-			}
-		}()
-
-		select {
-		case receivedPacket := <-receiveChannel:
-			// 受信パケットを解析
-			err = parseAndVerifyPacket(receivedPacket, sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
-			if err == nil {
-				// SYN-ACK確認成功
-				receivedCount++
-				rtt := time.Since(start)
-				rtts = append(rtts, rtt)
-				fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%.2fms\n", len(buf), destinationIpAddress, destinationPort, seqNumber, float64(rtt.Microseconds())/1000)
-
-				// ACK番号を取得
 				tcpHeader := receivedPacket[20:40]
-				ackNumber := binary.BigEndian.Uint32(tcpHeader[8:12])
+				receivedSourceIpAddress := net.IP(receivedPacket[12:16])
+				receivedDestinationIpAddress := net.IP(receivedPacket[16:20])
+				receivedSourcePort := int(binary.BigEndian.Uint16(tcpHeader[0:2]))
+				receivedDestinationPort := int(binary.BigEndian.Uint16(tcpHeader[2:4]))
 
-				// RSTパケットを生成
-				rstPacket := createRstPacket(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber, ackNumber)
-
-				// RSTパケットを送信
-				err = syscall.Sendto(fd, rstPacket, 0, &addr)
-				if err != nil {
-					fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
-					os.Exit(1)
+				// Synフラグ送信時の送信元IPアドレスとSyn-Ackフラグ受信時の送信先IPアドレスが一致しているか確認
+				if !receivedDestinationIpAddress.Equal(sourceIpAddress) {
+					receivedCount++
+					continue
 				}
-			}
-		case <-timeoutChannel:
-			// 何もしない
-		}
 
-		time.Sleep(1 * time.Second)
+				// Synフラグ送信時の送信先IPアドレスとSyn-Ackフラグ受信時の送信元IPアドレスが一致しているか確認
+				if !receivedSourceIpAddress.Equal(destinationIpAddress) {
+					receivedCount++
+					continue
+				}
+
+				// Synフラグ送信時の送信元ポートとSyn-Ackフラグ受信時の送信先ポートが一致しているか確認
+				if sourcePort != receivedDestinationPort {
+					receivedCount++
+					continue
+				}
+
+				// Synフラグ送信時の送信先ポートとSyn-Ackフラグ受信時の送信元ポートが一致しているか確認
+				if destinationPort != receivedSourcePort {
+					receivedCount++
+					continue
+				}
+
+				// 受信パケットを解析
+				err = parsePacket(tcpHeader, seqNumber)
+				if err == nil {
+					// SYN-ACK確認成功
+					successReceivedCount++
+					rtt := time.Since(start)
+					rtts = append(rtts, rtt)
+					fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%.2fms\n", len(buf), destinationIpAddress, destinationPort, seqNumber, float64(rtt.Microseconds())/1000)
+
+					// ACK番号を取得
+					ackNumber := binary.BigEndian.Uint32(tcpHeader[8:12])
+
+					// RSTパケットを生成
+					rstPacket := createRstPacket(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber, ackNumber)
+
+					// RSTパケットを送信
+					err = syscall.Sendto(fd, rstPacket, 0, &addr)
+					if err != nil {
+						fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
+						os.Exit(1)
+					}
+					break
+				} else {
+					fmt.Println("parsePacket実行時にエラーが発生しました", err)
+				}
+			case <-timeoutChannel:
+				// 何もしない
+			}
+		}
+		// 送信先に負荷を掛けないように次の実行まで待機
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	// RTT結果を表示
 	fmt.Printf("\n--- %s Synpack statistic ---\n", destinationHost)
 	fmt.Printf("%d packets transmitted, %d packets received, %.2f%% packet loss\n",
-		retryCount, receivedCount,
-		(float64(retryCount-receivedCount)/float64(retryCount))*100)
+		executedCount, successReceivedCount,
+		(float64(executedCount-successReceivedCount)/float64(executedCount))*100)
 	if len(rtts) > 0 {
 		minRTT, maxRTT, sumRTT := rtts[0], rtts[0], time.Duration(0)
 		for _, rtt := range rtts {
@@ -308,32 +353,15 @@ func createRstTcpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, sou
 }
 
 // パケットを解析してSYN-ACKを確認
-func parseAndVerifyPacket(buf []byte, sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumberSent uint32) error {
-	if len(buf) < 40 {
-		return fmt.Errorf("パケットが短すぎます")
-	}
-
-	// IPヘッダー解析
-	sourceIp := net.IP(buf[12:16])
-	destinationIp := net.IP(buf[16:20])
-	if !sourceIp.Equal(destinationIpAddress) || !destinationIp.Equal(sourceIpAddress) {
-		return fmt.Errorf("IPアドレスが一致しません")
-	}
-
-	// TCPヘッダー解析
-	tcpHeader := buf[20:40]
-	sourcePortRecv := int(binary.BigEndian.Uint16(tcpHeader[0:2]))
-	destinationPortRecv := int(binary.BigEndian.Uint16(tcpHeader[2:4]))
+func parsePacket(tcpHeader []byte, seqNumber uint32) error {
+	// フラグ
 	flags := tcpHeader[13]
 
-	// シーケンス番号
-	//seqNumberRecv := binary.BigEndian.Uint32(tcpHeader[4:8])  // 4バイト目から
 	// ACK番号
-	ackNumberRecv := binary.BigEndian.Uint32(tcpHeader[8:12]) // 8バイト目から
+	ackNumber := binary.BigEndian.Uint32(tcpHeader[8:12]) // 8バイト目から
 
-	if ackNumberRecv == seqNumberSent+1 && sourcePortRecv == destinationPort && destinationPortRecv == sourcePort && (flags&0x12) == 0x12 {
-		//fmt.Printf("SYN-ACKを受信しました: %s:%d -> %s:%d\n", sourceIp, sourcePortRecv, destinationIp, destinationPortRecv)
-		//fmt.Println("ACK番号:", ackNumberRecv)
+	if ackNumber == seqNumber+1 && (flags&0x12) == 0x12 {
+		// SYN-ACKフラグの受信が成功
 		return nil
 	}
 
@@ -413,11 +441,11 @@ func hasDockerInterfaceName(name string) bool {
 // ローカルで利用可能なポート番号を取得
 func generateAvailablePort() int {
 	// 再実行の回数
-	retryCount := 5
+	maxRetryCount := 5
 	// ポート番号の範囲
 	minPort := 49152
 	maxPort := 65535
-	for i := 0; i < retryCount; i++ {
+	for i := 0; i < maxRetryCount; i++ {
 		// ポート番号をランダムに取得
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(maxPort-minPort+1)))
 		if err != nil {
