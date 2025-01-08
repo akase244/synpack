@@ -190,26 +190,15 @@ func main() {
 				receivedSourcePort := int(binary.BigEndian.Uint16(tcpHeader[0:2]))
 				receivedDestinationPort := int(binary.BigEndian.Uint16(tcpHeader[2:4]))
 
-				// Synフラグ送信時の送信元IPアドレスとSyn-Ackフラグ受信時の送信先IPアドレスが一致しているか確認
-				if !receivedDestinationIpAddress.Equal(sourceIpAddress) {
-					receivedCount++
-					continue
-				}
-
-				// Synフラグ送信時の送信先IPアドレスとSyn-Ackフラグ受信時の送信元IPアドレスが一致しているか確認
-				if !receivedSourceIpAddress.Equal(destinationIpAddress) {
-					receivedCount++
-					continue
-				}
-
-				// Synフラグ送信時の送信元ポートとSyn-Ackフラグ受信時の送信先ポートが一致しているか確認
-				if sourcePort != receivedDestinationPort {
-					receivedCount++
-					continue
-				}
-
-				// Synフラグ送信時の送信先ポートとSyn-Ackフラグ受信時の送信元ポートが一致しているか確認
-				if destinationPort != receivedSourcePort {
+				// Synフラグ送信時の送信元IPアドレスとパケット受信時の送信先IPアドレスを比較
+				// Synフラグ送信時の送信先IPアドレスとパケット受信時の送信元IPアドレスを比較
+				// Synフラグ送信時の送信元ポートとパケット受信時の送信先ポートを比較
+				// Synフラグ送信時の送信先ポートとパケット受信時の送信元ポートを比較
+				if !receivedDestinationIpAddress.Equal(sourceIpAddress) ||
+					!receivedSourceIpAddress.Equal(destinationIpAddress) ||
+					sourcePort != receivedDestinationPort ||
+					destinationPort != receivedSourcePort {
+					// 不一致の場合は関係ないパケットなのでリトライ
 					receivedCount++
 					continue
 				}
