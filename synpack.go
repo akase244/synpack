@@ -177,6 +177,19 @@ func main() {
 				rtt := time.Since(start)
 				rtts = append(rtts, rtt)
 				fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%v\n", len(buf), destinationIpAddress, destinationPort, seqNumber, rtt)
+
+				// ACK番号を取得
+				tcpHeader := receivedPacket[20:40]
+				ackNumber := binary.BigEndian.Uint32(tcpHeader[8:12])
+
+				// RSTパケットを生成
+				rstPacket := createRstPacket(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber, ackNumber)
+
+				// RSTパケットを送信
+				if err := syscall.Sendto(fd, rstPacket, 0, &addr); err != nil {
+					fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
+					os.Exit(1)
+				}
 			}
 		case <-timeoutChannel:
 			// 何もしない
@@ -210,7 +223,7 @@ func main() {
 // SYNパケットを生成
 func createSynPacket(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32) []byte {
 	ipHeader := createIpHeader(sourceIpAddress, destinationIpAddress)
-	tcpHeader := createTcpHeader(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
+	tcpHeader := createSynTcpHeader(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
 	return append(ipHeader, tcpHeader...)
 }
 
@@ -234,7 +247,7 @@ func createIpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP) []byte 
 }
 
 // TCPヘッダーを生成
-func createTcpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32) []byte {
+func createSynTcpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32) []byte {
 	header := make([]byte, 20)
 	binary.BigEndian.PutUint16(header[0:2], uint16(sourcePort))
 	binary.BigEndian.PutUint16(header[2:4], uint16(destinationPort))
@@ -260,6 +273,31 @@ func createPseudoHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, tcp
 	binary.BigEndian.PutUint16(pseudoHeader[10:12], uint16(len(tcpHeader)))
 	copy(pseudoHeader[12:], tcpHeader)
 	return pseudoHeader
+}
+
+// RSTパケットを生成
+func createRstPacket(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32, ackNumber uint32) []byte {
+	ipHeader := createIpHeader(sourceIpAddress, destinationIpAddress)
+	tcpHeader := createRstTcpHeader(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber, ackNumber)
+	return append(ipHeader, tcpHeader...)
+}
+
+// TCPヘッダーを生成（RSTフラグ付き）
+func createRstTcpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32, ackNumber uint32) []byte {
+	header := make([]byte, 20)
+	binary.BigEndian.PutUint16(header[0:2], uint16(sourcePort))      // 送信元ポート
+	binary.BigEndian.PutUint16(header[2:4], uint16(destinationPort)) // 宛先ポート
+	binary.BigEndian.PutUint32(header[4:8], seqNumber)               // シーケンス番号
+	binary.BigEndian.PutUint32(header[8:12], ackNumber)              // ACK番号
+	header[12] = 0x50                                                // ヘッダー長(5)
+	header[13] = 0x04                                                // RSTフラグ
+	header[14], header[15] = 0x00, 0x00                              // ウィンドウサイズ
+
+	// チェックサム計算
+	pseudoHeader := createPseudoHeader(sourceIpAddress, destinationIpAddress, header)
+	checksum := calcChecksum(pseudoHeader)
+	header[16], header[17] = byte(checksum>>8), byte(checksum&0xff)
+	return header
 }
 
 // パケットを解析してSYN-ACKを確認
