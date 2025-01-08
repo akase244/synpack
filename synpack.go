@@ -124,7 +124,8 @@ func main() {
 		defer syscall.Close(fd)
 
 		// ソケットオプションでIPヘッダーを手動生成に設定
-		if err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1); err != nil {
+		err = syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1)
+		if err != nil {
 			fmt.Println("syscall.SetsockoptInt実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
@@ -140,7 +141,8 @@ func main() {
 
 		start := time.Now()
 		// SYNパケットを送信
-		if err := syscall.Sendto(fd, packet, 0, &addr); err != nil {
+		err = syscall.Sendto(fd, packet, 0, &addr)
+		if err != nil {
 			fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
@@ -171,7 +173,8 @@ func main() {
 		select {
 		case receivedPacket := <-receiveChannel:
 			// 受信パケットを解析
-			if err := parseAndVerifyPacket(receivedPacket, sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber); err == nil {
+			err = parseAndVerifyPacket(receivedPacket, sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
+			if err == nil {
 				// SYN-ACK確認成功
 				receivedCount++
 				rtt := time.Since(start)
@@ -186,7 +189,8 @@ func main() {
 				rstPacket := createRstPacket(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber, ackNumber)
 
 				// RSTパケットを送信
-				if err := syscall.Sendto(fd, rstPacket, 0, &addr); err != nil {
+				err = syscall.Sendto(fd, rstPacket, 0, &addr)
+				if err != nil {
 					fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
 					os.Exit(1)
 				}
