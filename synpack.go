@@ -215,7 +215,8 @@ func main() {
 					// SYN-ACK確認後に不要な受信処理を行わないようにループの終了条件を満たす
 					receivedCount = maxReceivedCount
 				} else {
-					fmt.Println("parsePacket実行時にエラーが発生しました", err)
+					// SYN-ACKフラグを含まない、もしくは、ACK番号が異なるパケットを受信した可能性があるためリトライ
+					continue
 				}
 			case <-timeoutChannel:
 				break
