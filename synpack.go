@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+const (
+	FlagSyn    uint8 = 0x02
+	FlagAck    uint8 = 0x10
+	FlagSynAck uint8 = FlagSyn + FlagAck
+)
+
 func main() {
 	// 引数を取得
 	argHost := flag.String("h", "", "送信先のホスト名(必須)")
@@ -282,7 +288,7 @@ func createTcpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, source
 	binary.BigEndian.PutUint16(header[2:4], uint16(destinationPort))
 	binary.BigEndian.PutUint32(header[4:8], seqNumber)
 	header[12] = 0x50                   // ヘッダー長(5)
-	header[13] = 0x02                   // SYNフラグ
+	header[13] = FlagSyn                // SYNフラグ
 	header[14], header[15] = 0x72, 0x10 // ウィンドウサイズ
 
 	// チェックサム計算
@@ -312,7 +318,7 @@ func parsePacket(tcpHeader []byte, seqNumber uint32) error {
 	// ACK番号
 	ackNumber := binary.BigEndian.Uint32(tcpHeader[8:12]) // 8バイト目から
 
-	if ackNumber == seqNumber+1 && (flags&0x12) == 0x12 {
+	if ackNumber == seqNumber+1 && (flags&FlagSynAck) == FlagSynAck {
 		// SYN-ACKフラグの受信が成功
 		return nil
 	}
