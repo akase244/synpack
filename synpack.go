@@ -24,7 +24,7 @@ func main() {
 	// 引数を取得
 	argHost := flag.String("h", "", "送信先のホスト名(必須)")
 	argPort := flag.Int("p", 0, "送信先のポート番号(必須:0-65535)")
-	argCount := flag.Int("c", 0, "実行回数")
+	argCount := flag.Int("c", 0, "実行回数(必須)")
 	flag.Parse()
 
 	// シグナル受信設定
@@ -47,8 +47,8 @@ func main() {
 	}
 
 	// 実行回数の妥当性チェック
-	if *argCount < 0 {
-		fmt.Fprintln(os.Stderr, "実行回数は1以上を指定してください")
+	if *argCount <= 0 {
+		fmt.Fprintln(os.Stderr, "実行回数(-c)は1以上を指定してください")
 		os.Exit(1)
 	}
 
@@ -92,11 +92,8 @@ func main() {
 	fmt.Printf("Synpack %s (%s) -> %s (%s)\n", sourceInterfaceName, sourceIpAddress, destinationHost, destinationIpAddress)
 	executedCount := 0
 	successReceivedCount := 0
-	for {
-		// 引数で指定された実行回数を超えるまで処理を繰り返す
-		if maxExecutionCount > 0 && executedCount >= maxExecutionCount {
-			break
-		}
+	// 引数で指定された実行回数を超えるまで処理を繰り返す
+	for executedCount < maxExecutionCount {
 		// ctrl+cが押されたら処理を停止する
 		if shouldExit {
 			break
