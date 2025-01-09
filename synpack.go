@@ -212,7 +212,8 @@ func main() {
 					rtt := time.Since(start)
 					rtts = append(rtts, rtt)
 					fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%.2fms\n", len(buf), destinationIpAddress, destinationPort, seqNumber, float64(rtt.Microseconds())/1000)
-					break
+					// SYN-ACK確認後に不要な受信処理を行わないようにループの終了条件を満たす
+					receivedCount = maxReceivedCount
 				} else {
 					fmt.Println("parsePacket実行時にエラーが発生しました", err)
 				}
