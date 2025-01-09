@@ -62,7 +62,7 @@ func TestCreateIpHeader(t *testing.T) {
 	}
 }
 
-func TestCreateSynTcpHeader(t *testing.T) {
+func TestCreateTcpHeader(t *testing.T) {
 	sourceIp := net.IPv4(192, 168, 0, 1)
 	destinationIp := net.IPv4(8, 8, 8, 8)
 	sourcePort := 54321
@@ -78,7 +78,7 @@ func TestCreateSynTcpHeader(t *testing.T) {
 	expectedHeader[14], expectedHeader[15] = 0x72, 0x10                      // ウィンドウサイズ
 
 	// 実際のヘッダー作成
-	actualHeader := createSynTcpHeader(sourceIp, destinationIp, sourcePort, destinationPort, seqNumber)
+	actualHeader := createTcpHeader(sourceIp, destinationIp, sourcePort, destinationPort, seqNumber)
 
 	// チェックサム計算
 	pseudoHeader := createPseudoHeader(sourceIp, destinationIp, expectedHeader)
@@ -87,7 +87,7 @@ func TestCreateSynTcpHeader(t *testing.T) {
 	expectedHeader[17] = byte(checksum & 0xff) // チェックサム (下位バイト)
 
 	if !reflect.DeepEqual(actualHeader, expectedHeader) {
-		t.Errorf("createSynTcpHeader(%q, %q, %d, %d, %d) = %v; expect %v", sourceIp, destinationIp, sourcePort, destinationPort, seqNumber, actualHeader, expectedHeader)
+		t.Errorf("createTcpHeader(%q, %q, %d, %d, %d) = %v; expect %v", sourceIp, destinationIp, sourcePort, destinationPort, seqNumber, actualHeader, expectedHeader)
 	}
 }
 
