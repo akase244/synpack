@@ -152,73 +152,47 @@ func main() {
 		// SYN-ACKパケットを受信
 		buf := make([]byte, 4096)
 
-		// タイムアウトの設定(0.5秒)
-		timeout := 500 * time.Millisecond
+		// タイムアウトの設定(5秒)
+		timeout := time.Now().Add(5 * time.Second)
+		for time.Now().Before(timeout) {
+			_, _, err := syscall.Recvfrom(fd, buf, 0)
+			if err != nil {
+				// 受信に失敗したのでリトライ
+				continue
+			}
 
-		// 受信処理の最大回数
-		maxReceivedCount := 5
-		// 受信処理の実行回数
-		receivedCount := 0
+			if len(buf) < 40 {
+				// パケットが短すぎるのでリトライ
+				continue
+			}
 
-		for receivedCount < maxReceivedCount {
-			// チャネルを使ってタイムアウトと受信を監視
-			timeoutChannel := time.After(timeout)
-			receiveChannel := make(chan []byte)
+			tcpHeader := buf[20:40]
+			receivedSourceIpAddress := net.IP(buf[12:16])
+			receivedDestinationIpAddress := net.IP(buf[16:20])
+			receivedSourcePort := int(binary.BigEndian.Uint16(tcpHeader[0:2]))
+			receivedDestinationPort := int(binary.BigEndian.Uint16(tcpHeader[2:4]))
 
-			go func() {
-				for {
-					n, _, err := syscall.Recvfrom(fd, buf, 0)
-					if err != nil {
-						fmt.Println("syscall.Recvfrom実行時にエラーが発生しました", err)
-						os.Exit(1)
-					}
+			// Synフラグ送信時の送信元IPアドレスとパケット受信時の送信先IPアドレスを比較
+			// Synフラグ送信時の送信先IPアドレスとパケット受信時の送信元IPアドレスを比較
+			// Synフラグ送信時の送信元ポートとパケット受信時の送信先ポートを比較
+			// Synフラグ送信時の送信先ポートとパケット受信時の送信元ポートを比較
+			if !receivedDestinationIpAddress.Equal(sourceIpAddress) ||
+				!receivedSourceIpAddress.Equal(destinationIpAddress) ||
+				sourcePort != receivedDestinationPort ||
+				destinationPort != receivedSourcePort {
+				// 不一致の場合は関係ないパケットなのでリトライ
+				continue
+			}
 
-					receivedCount++
-					// データ受信時にチャネルに送る
-					receiveChannel <- buf[:n]
-				}
-			}()
-
-			select {
-			case receivedPacket := <-receiveChannel:
-				if len(receivedPacket) < 40 {
-					// パケットが短すぎるのでリトライ
-					continue
-				}
-
-				tcpHeader := receivedPacket[20:40]
-				receivedSourceIpAddress := net.IP(receivedPacket[12:16])
-				receivedDestinationIpAddress := net.IP(receivedPacket[16:20])
-				receivedSourcePort := int(binary.BigEndian.Uint16(tcpHeader[0:2]))
-				receivedDestinationPort := int(binary.BigEndian.Uint16(tcpHeader[2:4]))
-
-				// Synフラグ送信時の送信元IPアドレスとパケット受信時の送信先IPアドレスを比較
-				// Synフラグ送信時の送信先IPアドレスとパケット受信時の送信元IPアドレスを比較
-				// Synフラグ送信時の送信元ポートとパケット受信時の送信先ポートを比較
-				// Synフラグ送信時の送信先ポートとパケット受信時の送信元ポートを比較
-				if !receivedDestinationIpAddress.Equal(sourceIpAddress) ||
-					!receivedSourceIpAddress.Equal(destinationIpAddress) ||
-					sourcePort != receivedDestinationPort ||
-					destinationPort != receivedSourcePort {
-					// 不一致の場合は関係ないパケットなのでリトライ
-					continue
-				}
-
-				// 受信パケットを解析
-				err = parsePacket(tcpHeader, seqNumber)
-				if err == nil {
-					// SYN-ACK確認成功
-					successReceivedCount++
-					rtt := time.Since(start)
-					rtts = append(rtts, rtt)
-					fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%.2fms\n", len(buf), destinationIpAddress, destinationPort, seqNumber, float64(rtt.Microseconds())/1000)
-					// SYN-ACK確認後に不要な受信処理を行わないようにループの終了条件を満たす
-					receivedCount = maxReceivedCount
-				} else {
-					// SYN-ACKフラグを含まない、もしくは、ACK番号が異なるパケットを受信した可能性があるためリトライ
-					continue
-				}
-			case <-timeoutChannel:
+			// 受信パケットを解析
+			err = parsePacket(tcpHeader, seqNumber)
+			if err == nil {
+				// SYN-ACK確認成功
+				successReceivedCount++
+				rtt := time.Since(start)
+				rtts = append(rtts, rtt)
+				fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%.2fms\n", len(buf), destinationIpAddress, destinationPort, seqNumber, float64(rtt.Microseconds())/1000)
+				// SYN-ACK確認後に不要な受信処理を行わないようにループを抜ける
 				break
 			}
 		}
