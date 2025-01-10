@@ -115,18 +115,14 @@ func main() {
 		seqNumber := uint32(n.Int64())
 
 		// ソケットを作成
-		// - アドレスファミリー:IPv4
-		// - ソケットの種類:低レベルソケット
-		// - プロトコル:TCP
-		fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_TCP)
+		fd, err := createSocket()
 		if err != nil {
 			fmt.Println("syscall.Socket実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
 		defer syscall.Close(fd)
 
-		// ソケットオプションでIPヘッダーを手動生成に設定
-		err = syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1)
+		fd, err = setSocketOption(fd)
 		if err != nil {
 			fmt.Println("syscall.SetsockoptInt実行時にエラーが発生しました", err)
 			os.Exit(1)
@@ -142,20 +138,20 @@ func main() {
 		copy(addr.Addr[:], destinationIpAddress.To4())
 
 		start := time.Now()
-		// SYNパケットを送信
-		err = syscall.Sendto(fd, packet, 0, &addr)
+		// パケットを送信
+		fd, err = sendPacket(fd, packet, &addr)
 		if err != nil {
 			fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
 
-		// SYN-ACKパケットを受信
 		buf := make([]byte, 4096)
 
 		// タイムアウトの設定(5秒)
 		timeout := time.Now().Add(5 * time.Second)
 		for time.Now().Before(timeout) {
-			_, _, err := syscall.Recvfrom(fd, buf, 0)
+			// パケットを受信
+			fd, err = receivePacket(fd, buf)
 			if err != nil {
 				// 受信に失敗したのでリトライ
 				continue
@@ -414,4 +410,29 @@ func getTargetIpAddress(destinationHost string) string {
 		}
 	}
 	return ""
+}
+
+func createSocket() (int, error) {
+	// ソケットを作成
+	// - アドレスファミリー:IPv4
+	// - ソケットの種類:低レベルソケット
+	// - プロトコル:TCP
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_TCP)
+	return fd, err
+}
+
+func setSocketOption(fd int) (int, error) {
+	// ソケットオプションでIPヘッダーを手動生成に設定
+	err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1)
+	return fd, err
+}
+
+func sendPacket(fd int, packet []byte, address *syscall.SockaddrInet4) (int, error) {
+	err := syscall.Sendto(fd, packet, 0, address)
+	return fd, err
+}
+
+func receivePacket(fd int, buf []byte) (int, error) {
+	_, _, err := syscall.Recvfrom(fd, buf, 0)
+	return fd, err
 }
