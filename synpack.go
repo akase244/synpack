@@ -105,7 +105,13 @@ func main() {
 		}
 
 		// SYNパケットを生成
-		packet := createSynPacket(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
+		packet := createSynPacket(
+			sourceIpAddress,
+			destinationIpAddress,
+			sourcePort,
+			destinationPort,
+			seqNumber,
+		)
 
 		// 宛先アドレス設定
 		addr := syscall.SockaddrInet4{
@@ -211,7 +217,13 @@ func main() {
 }
 
 // SYNパケットを生成
-func createSynPacket(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32) []byte {
+func createSynPacket(
+	sourceIpAddress net.IP,
+	destinationIpAddress net.IP,
+	sourcePort int,
+	destinationPort int,
+	seqNumber uint32,
+) []byte {
 	ipHeader := createIpHeader(sourceIpAddress, destinationIpAddress)
 	tcpHeader := createTcpHeader(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
 	return append(ipHeader, tcpHeader...)
