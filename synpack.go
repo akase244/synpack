@@ -22,42 +22,12 @@ const (
 
 func main() {
 	// 引数を取得
-	argHost := flag.String("h", "", "送信先のホスト名(必須)")
-	argPort := flag.Int("p", 0, "送信先のポート番号(必須:0-65535)")
-	argCount := flag.Int("c", 0, "実行回数(必須)")
-	flag.Parse()
+	destinationHost, destinationPort, maxExecutionCount := getArguments()
 
 	// シグナル受信設定
 	signalChan := make(chan os.Signal, 1)
 	// [ctrl+c]をキャッチする
 	signal.Notify(signalChan, os.Interrupt)
-
-	// 送信先ホスト名の必須チェック
-	if *argHost == "" {
-		fmt.Fprintln(os.Stderr, "送信先ホスト名(-h)は必須です")
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	// 送信先ポート番号の妥当性チェック
-	if *argPort < 0 || *argPort > 65535 {
-		fmt.Fprintln(os.Stderr, "送信先ポート番号(-p)は1〜65535の範囲で指定してください")
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	// 実行回数の妥当性チェック
-	if *argCount <= 0 {
-		fmt.Fprintln(os.Stderr, "実行回数(-c)は1以上を指定してください")
-		os.Exit(1)
-	}
-
-	// 送信先ホスト名
-	destinationHost := *argHost
-	// 送信先ポート番号
-	destinationPort := *argPort
-	// 実行回数
-	maxExecutionCount := *argCount
 
 	// ローカルIPアドレス
 	localInterfaceName, localIpAddress := getLocalInterface()
@@ -435,4 +405,34 @@ func sendPacket(fd int, packet []byte, address *syscall.SockaddrInet4) (int, err
 func receivePacket(fd int, buf []byte) (int, error) {
 	_, _, err := syscall.Recvfrom(fd, buf, 0)
 	return fd, err
+}
+
+func getArguments() (string, int, int) {
+	// 引数を取得
+	argHost := flag.String("h", "", "送信先のホスト名(必須)")
+	argPort := flag.Int("p", 0, "送信先のポート番号(必須:0-65535)")
+	argCount := flag.Int("c", 0, "実行回数(必須)")
+	flag.Parse()
+
+	// 送信先ホスト名の必須チェック
+	if *argHost == "" {
+		fmt.Fprintln(os.Stderr, "送信先ホスト名(-h)は必須です")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	// 送信先ポート番号の妥当性チェック
+	if *argPort < 0 || *argPort > 65535 {
+		fmt.Fprintln(os.Stderr, "送信先ポート番号(-p)は1〜65535の範囲で指定してください")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	// 実行回数の妥当性チェック
+	if *argCount <= 0 {
+		fmt.Fprintln(os.Stderr, "実行回数(-c)は1以上を指定してください")
+		os.Exit(1)
+	}
+
+	return *argHost, *argPort, *argCount
 }
