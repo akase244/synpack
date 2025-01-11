@@ -8,11 +8,11 @@ Its name is derived from the Japanese word "心拍" (shinpaku), meaning "heartbe
 $ go build -o synpack
 $ sudo ./synpack -h github.com -p 80 -c 3
 Synpack eth0 (192.168.0.1) -> github.com (20.27.177.113)
-len=4096 ip=20.27.177.113 port=80 seq=3884279077 rtt=81.550847ms
-len=4096 ip=20.27.177.113 port=80 seq=2575736597 rtt=81.027256ms
-len=4096 ip=20.27.177.113 port=80 seq=3729930979 rtt=77.739979ms
+len=4096 ip=20.27.177.113 port=80 seq=344846291 rtt=29.27ms
+len=4096 ip=20.27.177.113 port=80 seq=2709490451 rtt=25.81ms
+len=4096 ip=20.27.177.113 port=80 seq=2965481930 rtt=28.46ms
 
 --- github.com Synpack statistic ---
 3 packets transmitted, 3 packets received, 0.00% packet loss
-round-trip min/avg/max = 77.739979ms/80.106027ms/81.550847ms
+round-trip min/avg/max = 25.81ms/27.85ms/29.27ms
 ```
