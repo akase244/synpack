@@ -248,7 +248,13 @@ func createIpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP) []byte 
 }
 
 // TCPヘッダーを生成
-func createTcpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32) []byte {
+func createTcpHeader(
+	sourceIpAddress net.IP,
+	destinationIpAddress net.IP,
+	sourcePort int,
+	destinationPort int,
+	seqNumber uint32,
+) []byte {
 	header := make([]byte, 20)
 	binary.BigEndian.PutUint16(header[0:2], uint16(sourcePort))      // 送信元ポート(16ビット)
 	binary.BigEndian.PutUint16(header[2:4], uint16(destinationPort)) // 送信先ポート(16ビット)
@@ -266,7 +272,11 @@ func createTcpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, source
 }
 
 // 疑似ヘッダーを生成
-func createPseudoHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, tcpHeader []byte) []byte {
+func createPseudoHeader(
+	sourceIpAddress net.IP,
+	destinationIpAddress net.IP,
+	tcpHeader []byte,
+) []byte {
 	pseudoHeader := make([]byte, 12+len(tcpHeader))
 	copy(pseudoHeader[0:4], sourceIpAddress.To4())
 	copy(pseudoHeader[4:8], destinationIpAddress.To4())
@@ -321,7 +331,9 @@ func getLocalInterface() (string, string) {
 		// - 無効状態
 		// - ループバックアドレス
 		// - インターフェース名がDocker関連
-		if (iface.Flags&net.FlagUp) == 0 || (iface.Flags&net.FlagLoopback) != 0 || hasDockerInterfaceName(iface.Name) {
+		if (iface.Flags&net.FlagUp) == 0 ||
+			(iface.Flags&net.FlagLoopback) != 0 ||
+			hasDockerInterfaceName(iface.Name) {
 			continue
 		}
 
