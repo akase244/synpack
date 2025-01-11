@@ -197,20 +197,20 @@ func main() {
 		(float64(executedCount-successReceivedCount)/float64(executedCount))*100,
 	)
 	if len(rtts) > 0 {
-		minRTT, maxRTT, sumRTT := rtts[0], rtts[0], time.Duration(0)
+		minRtt, maxRtt, sumRtt := rtts[0], rtts[0], time.Duration(0)
 		for _, rtt := range rtts {
-			if rtt < minRTT {
-				minRTT = rtt
+			if rtt < minRtt {
+				minRtt = rtt
 			}
-			if rtt > maxRTT {
-				maxRTT = rtt
+			if rtt > maxRtt {
+				maxRtt = rtt
 			}
-			sumRTT += rtt
+			sumRtt += rtt
 		}
 		fmt.Printf("round-trip min/avg/max = %.2fms/%.2fms/%.2fms\n",
-			float64(minRTT.Microseconds())/1000,
-			float64(sumRTT.Microseconds())/float64(len(rtts))/1000,
-			float64(maxRTT.Microseconds())/1000)
+			float64(minRtt.Microseconds())/1000,
+			float64(sumRtt.Microseconds())/float64(len(rtts))/1000,
+			float64(maxRtt.Microseconds())/1000)
 	} else {
 		fmt.Printf("round-trip min/avg/max = 0.0/0.0/0.0\n")
 	}
