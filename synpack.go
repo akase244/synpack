@@ -232,36 +232,36 @@ func createSynPacket(
 // IPヘッダーを生成
 func createIpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP) []byte {
 	header := make([]byte, 20)
-	header[0] = 0x45                  // バージョン(4) + ヘッダー長(5)
-	header[1] = 0x00                  // サービスタイプ
-	header[2], header[3] = 0x00, 0x28 // 全長 (40バイト)
-	header[4], header[5] = 0x00, 0x00 // 識別子
-	header[6], header[7] = 0x40, 0x00 // フラグメントオフセット
-	header[8] = 0x40                  // TTL
-	header[9] = syscall.IPPROTO_TCP   // プロトコル
-	copy(header[12:16], sourceIpAddress.To4())
-	copy(header[16:20], destinationIpAddress.To4())
-
+	header[0] = 0x45                                // バージョン(4ビット) + ヘッダー長(4ビット)
+	header[1] = 0x00                                // ToS(サービスタイプ)(8ビット)
+	header[2], header[3] = 0x00, 0x28               // パケット長(16ビット)
+	header[4], header[5] = 0x00, 0x00               // 識別子(16ビット)
+	header[6], header[7] = 0x40, 0x00               // フラグ(3ビット) + フラグメントオフセット(13ビット)
+	header[8] = 0x40                                // TTL(8ビット)
+	header[9] = syscall.IPPROTO_TCP                 // プロトコル番号(8ビット)
+	copy(header[12:16], sourceIpAddress.To4())      // 送信元IPアドレス(32ビット)
+	copy(header[16:20], destinationIpAddress.To4()) // 送信先IPアドレス(32ビット)
 	// チェックサム計算
 	checksum := calcChecksum(header)
-	header[10], header[11] = byte(checksum>>8), byte(checksum&0xff)
+	header[10], header[11] = byte(checksum>>8), byte(checksum&0xff) // チェックサム(16ビット)
 	return header
 }
 
 // TCPヘッダーを生成
 func createTcpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP, sourcePort int, destinationPort int, seqNumber uint32) []byte {
 	header := make([]byte, 20)
-	binary.BigEndian.PutUint16(header[0:2], uint16(sourcePort))
-	binary.BigEndian.PutUint16(header[2:4], uint16(destinationPort))
-	binary.BigEndian.PutUint32(header[4:8], seqNumber)
-	header[12] = 0x50                   // ヘッダー長(5)
-	header[13] = FlagSyn                // SYNフラグ
-	header[14], header[15] = 0x72, 0x10 // ウィンドウサイズ
-
+	binary.BigEndian.PutUint16(header[0:2], uint16(sourcePort))      // 送信元ポート(16ビット)
+	binary.BigEndian.PutUint16(header[2:4], uint16(destinationPort)) // 送信先ポート(16ビット)
+	binary.BigEndian.PutUint32(header[4:8], seqNumber)               // シーケンス番号(32ビット)
+	binary.BigEndian.PutUint32(header[8:12], 0)                      // ACK番号(32ビット)
+	header[12] = 0x50                                                // データオフセット(4ビット) + 予約領域(4ビット)
+	header[13] = FlagSyn                                             // コントロールビット(8ビット)
+	header[14], header[15] = 0x72, 0x10                              // ウィンドウサイズ(16ビット)
+	binary.BigEndian.PutUint16(header[18:20], 0)                     // 緊急ポインタ(16ビット)
 	// チェックサム計算
 	pseudoHeader := createPseudoHeader(sourceIpAddress, destinationIpAddress, header)
 	checksum := calcChecksum(pseudoHeader)
-	header[16], header[17] = byte(checksum>>8), byte(checksum&0xff)
+	header[16], header[17] = byte(checksum>>8), byte(checksum&0xff) // チェックサム(16ビット)
 	return header
 }
 
