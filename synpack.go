@@ -59,7 +59,13 @@ func main() {
 		shouldExit = true
 	}()
 
-	fmt.Printf("Synpack %s (%s) -> %s (%s)\n", sourceInterfaceName, sourceIpAddress, destinationHost, destinationIpAddress)
+	fmt.Printf(
+		"Synpack %s (%s) -> %s (%s)\n",
+		sourceInterfaceName,
+		sourceIpAddress,
+		destinationHost,
+		destinationIpAddress,
+	)
 	executedCount := 0
 	successReceivedCount := 0
 	// 引数で指定された実行回数を超えるまで処理を繰り返す
@@ -157,7 +163,14 @@ func main() {
 				successReceivedCount++
 				rtt := time.Since(start)
 				rtts = append(rtts, rtt)
-				fmt.Printf("len=%d ip=%s port=%d seq=%d rtt=%.2fms\n", len(buf), destinationIpAddress, destinationPort, seqNumber, float64(rtt.Microseconds())/1000)
+				fmt.Printf(
+					"len=%d ip=%s port=%d seq=%d rtt=%.2fms\n",
+					len(buf),
+					destinationIpAddress,
+					destinationPort,
+					seqNumber,
+					float64(rtt.Microseconds())/1000,
+				)
 				// SYN-ACK確認後に不要な受信処理を行わないようにループを抜ける
 				break
 			}
@@ -171,9 +184,12 @@ func main() {
 
 	// RTT結果を表示
 	fmt.Printf("\n--- %s Synpack statistic ---\n", destinationHost)
-	fmt.Printf("%d packets transmitted, %d packets received, %.2f%% packet loss\n",
-		executedCount, successReceivedCount,
-		(float64(executedCount-successReceivedCount)/float64(executedCount))*100)
+	fmt.Printf(
+		"%d packets transmitted, %d packets received, %.2f%% packet loss\n",
+		executedCount,
+		successReceivedCount,
+		(float64(executedCount-successReceivedCount)/float64(executedCount))*100,
+	)
 	if len(rtts) > 0 {
 		minRTT, maxRTT, sumRTT := rtts[0], rtts[0], time.Duration(0)
 		for _, rtt := range rtts {
