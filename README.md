@@ -16,3 +16,7 @@ len=4096 ip=20.27.177.113 port=80 seq=2965481930 rtt=28.46ms
 3 packets transmitted, 3 packets received, 0.00% packet loss
 round-trip min/avg/max = 25.81ms/27.85ms/29.27ms
 ```
+
+## Supported Environment
+
+- Ubuntu 22.04
