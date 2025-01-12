@@ -471,6 +471,7 @@ func getArguments() (string, int, int) {
 	// 実行回数の妥当性チェック
 	if *argCount <= 0 {
 		fmt.Fprintln(os.Stderr, "実行回数(-c)は1以上を指定してください")
+		flag.Usage()
 		os.Exit(1)
 	}
 
