@@ -98,7 +98,7 @@ func main() {
 		}
 		defer syscall.Close(fd)
 
-		fd, err = setSocketOption(fd)
+		fd, err = setIpHeaderInclude(fd)
 		if err != nil {
 			fmt.Println("syscall.SetsockoptInt実行時にエラーが発生しました", err)
 			os.Exit(1)
@@ -431,10 +431,13 @@ func createSocket() (int, error) {
 	return fd, err
 }
 
-func setSocketOption(fd int) (int, error) {
-	// ソケットオプションでIPヘッダーを手動生成に設定
-	err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1)
-	return fd, err
+func setIpHeaderInclude(fd int) (int, error) {
+	if runtime.GOOS != "darwin" {
+		// ソケットオプションでIPヘッダーを手動生成に設定
+		err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1)
+		return fd, err
+	}
+	return fd, nil
 }
 
 func sendPacket(fd int, packet []byte, address *syscall.SockaddrInet4) (int, error) {
