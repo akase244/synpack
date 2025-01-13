@@ -114,15 +114,26 @@ func main() {
 			seqNumber,
 		)
 
-		// 宛先アドレス設定
-		addr := syscall.SockaddrInet4{
+		// 送信元アドレス設定
+		sourceAddr := syscall.SockaddrInet4{
+			Port: sourcePort,
+		}
+		copy(sourceAddr.Addr[:], sourceIpAddress.To4())
+		err = syscall.Bind(fd, &sourceAddr)
+		if err != nil {
+			fmt.Println("syscall.Bind実行時にエラーが発生しました", err)
+			os.Exit(1)
+		}
+
+		// 送信先アドレス設定
+		destinationAddr := syscall.SockaddrInet4{
 			Port: destinationPort,
 		}
-		copy(addr.Addr[:], destinationIpAddress.To4())
+		copy(destinationAddr.Addr[:], destinationIpAddress.To4())
 
 		start := time.Now()
 		// パケットを送信
-		fd, err = sendPacket(fd, packet, &addr)
+		fd, err = sendPacket(fd, packet, &destinationAddr)
 		if err != nil {
 			fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
 			os.Exit(1)
