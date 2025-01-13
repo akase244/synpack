@@ -115,25 +115,19 @@ func main() {
 		)
 
 		// 送信元アドレス設定
-		sourceAddr := syscall.SockaddrInet4{
-			Port: sourcePort,
-		}
-		copy(sourceAddr.Addr[:], sourceIpAddress.To4())
-		err = syscall.Bind(fd, &sourceAddr)
+		sourceSocketAddress := getSocketAddress(sourceIpAddress, sourcePort)
+		fd, err = bindSocketAddress(fd, sourceSocketAddress)
 		if err != nil {
 			fmt.Println("syscall.Bind実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
 
 		// 送信先アドレス設定
-		destinationAddr := syscall.SockaddrInet4{
-			Port: destinationPort,
-		}
-		copy(destinationAddr.Addr[:], destinationIpAddress.To4())
+		destinationSocketAddress := getSocketAddress(destinationIpAddress, destinationPort)
 
 		start := time.Now()
 		// パケットを送信
-		fd, err = sendPacket(fd, packet, &destinationAddr)
+		fd, err = sendPacket(fd, packet, destinationSocketAddress)
 		if err != nil {
 			fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
 			os.Exit(1)
@@ -459,6 +453,19 @@ func sendPacket(fd int, packet []byte, address *syscall.SockaddrInet4) (int, err
 
 func receivePacket(fd int, buf []byte) (int, error) {
 	_, _, err := syscall.Recvfrom(fd, buf, 0)
+	return fd, err
+}
+
+func getSocketAddress(ipAddress net.IP, port int) *syscall.SockaddrInet4 {
+	address := syscall.SockaddrInet4{
+		Port: port,
+	}
+	copy(address.Addr[:], ipAddress.To4())
+	return &address
+}
+
+func bindSocketAddress(fd int, address *syscall.SockaddrInet4) (int, error) {
+	err := syscall.Bind(fd, address)
 	return fd, err
 }
 
