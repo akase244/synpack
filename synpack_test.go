@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/binary"
+	"golang.org/x/sys/unix"
 	"net"
 	"reflect"
-	"syscall"
 	"testing"
 )
 
@@ -41,9 +41,9 @@ func TestCreateIpHeader(t *testing.T) {
 		0x00, 0x28, // 全長
 		0x00, 0x00, // 識別子
 		0x40, 0x00, // フラグメントオフセット
-		0x40,                // TTL
-		syscall.IPPROTO_TCP, // プロトコル
-		0x00, 0x00,          // チェックサム (後で計算される)
+		0x40,             // TTL
+		unix.IPPROTO_TCP, // プロトコル
+		0x00, 0x00,       // チェックサム (後で計算される)
 		192, 168, 0, 1, // 送信元IPアドレス
 		8, 8, 8, 8, // 送信先IPアドレス
 	}
@@ -110,7 +110,7 @@ func TestCreatePseudoHeader(t *testing.T) {
 	copy(expected[0:4], sourceIp.To4())
 	copy(expected[4:8], destinationIp.To4())
 	expected[8] = 0x00                                                  // 予約
-	expected[9] = syscall.IPPROTO_TCP                                   // プロトコル
+	expected[9] = unix.IPPROTO_TCP                                      // プロトコル
 	binary.BigEndian.PutUint16(expected[10:12], uint16(len(tcpHeader))) // TCPヘッダーの長さ
 	copy(expected[12:], tcpHeader)
 

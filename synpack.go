@@ -5,13 +5,13 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"math/big"
 	"net"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -94,14 +94,14 @@ func main() {
 		// ソケットを作成
 		fd, err := createSocket()
 		if err != nil {
-			fmt.Println("syscall.Socket実行時にエラーが発生しました", err)
+			fmt.Println("unix.Socket実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
-		defer syscall.Close(fd)
+		defer unix.Close(fd)
 
 		fd, err = setIpHeaderInclude(fd)
 		if err != nil {
-			fmt.Println("syscall.SetsockoptInt実行時にエラーが発生しました", err)
+			fmt.Println("unix.SetsockoptInt実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
 
@@ -118,7 +118,7 @@ func main() {
 		sourceSocketAddress := getSocketAddress(sourceIpAddress, sourcePort)
 		fd, err = bindSocketAddress(fd, sourceSocketAddress)
 		if err != nil {
-			fmt.Println("syscall.Bind実行時にエラーが発生しました", err)
+			fmt.Println("unix.Bind実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
 
@@ -129,7 +129,7 @@ func main() {
 		// パケットを送信
 		fd, err = sendPacket(fd, packet, destinationSocketAddress)
 		if err != nil {
-			fmt.Println("syscall.Sendto実行時にエラーが発生しました", err)
+			fmt.Println("unix.Sendto実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
 
@@ -244,7 +244,7 @@ func createIpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP) []byte 
 	header[4], header[5] = 0x00, 0x00               // 識別子(16ビット)
 	header[6], header[7] = 0x40, 0x00               // フラグ(3ビット) + フラグメントオフセット(13ビット)
 	header[8] = 0x40                                // TTL(8ビット)
-	header[9] = syscall.IPPROTO_TCP                 // プロトコル番号(8ビット)
+	header[9] = unix.IPPROTO_TCP                    // プロトコル番号(8ビット)
 	copy(header[12:16], sourceIpAddress.To4())      // 送信元IPアドレス(32ビット)
 	copy(header[16:20], destinationIpAddress.To4()) // 送信先IPアドレス(32ビット)
 	// チェックサム計算
@@ -287,7 +287,7 @@ func createPseudoHeader(
 	copy(pseudoHeader[0:4], sourceIpAddress.To4())
 	copy(pseudoHeader[4:8], destinationIpAddress.To4())
 	pseudoHeader[8] = 0x00 // 予約
-	pseudoHeader[9] = syscall.IPPROTO_TCP
+	pseudoHeader[9] = unix.IPPROTO_TCP
 	binary.BigEndian.PutUint16(pseudoHeader[10:12], uint16(len(tcpHeader)))
 	copy(pseudoHeader[12:], tcpHeader)
 	return pseudoHeader
@@ -433,39 +433,39 @@ func createSocket() (int, error) {
 	// - アドレスファミリー:IPv4
 	// - ソケットの種類:低レベルソケット
 	// - プロトコル:TCP
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_TCP)
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_TCP)
 	return fd, err
 }
 
 func setIpHeaderInclude(fd int) (int, error) {
 	if runtime.GOOS != "darwin" {
 		// ソケットオプションでIPヘッダーを手動生成に設定
-		err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1)
+		err := unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_HDRINCL, 1)
 		return fd, err
 	}
 	return fd, nil
 }
 
-func sendPacket(fd int, packet []byte, address *syscall.SockaddrInet4) (int, error) {
-	err := syscall.Sendto(fd, packet, 0, address)
+func sendPacket(fd int, packet []byte, address *unix.SockaddrInet4) (int, error) {
+	err := unix.Sendto(fd, packet, 0, address)
 	return fd, err
 }
 
 func receivePacket(fd int, buf []byte) (int, error) {
-	_, _, err := syscall.Recvfrom(fd, buf, 0)
+	_, _, err := unix.Recvfrom(fd, buf, 0)
 	return fd, err
 }
 
-func getSocketAddress(ipAddress net.IP, port int) *syscall.SockaddrInet4 {
-	address := syscall.SockaddrInet4{
+func getSocketAddress(ipAddress net.IP, port int) *unix.SockaddrInet4 {
+	address := unix.SockaddrInet4{
 		Port: port,
 	}
 	copy(address.Addr[:], ipAddress.To4())
 	return &address
 }
 
-func bindSocketAddress(fd int, address *syscall.SockaddrInet4) (int, error) {
-	err := syscall.Bind(fd, address)
+func bindSocketAddress(fd int, address *unix.SockaddrInet4) (int, error) {
+	err := unix.Bind(fd, address)
 	return fd, err
 }
 
