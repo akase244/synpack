@@ -31,37 +31,6 @@ func TestHasDockerInterfaceName(t *testing.T) {
 	}
 }
 
-func TestCreateIpHeader(t *testing.T) {
-	sourceIp := net.IPv4(192, 168, 0, 1)
-	destinationIp := net.IPv4(8, 8, 8, 8)
-
-	expectedHeader := []byte{
-		0x45,       // バージョン + ヘッダー長
-		0x00,       // サービスタイプ
-		0x00, 0x28, // 全長
-		0x00, 0x00, // 識別子
-		0x40, 0x00, // フラグメントオフセット
-		0x40,             // TTL
-		unix.IPPROTO_TCP, // プロトコル
-		0x00, 0x00,       // チェックサム (後で計算される)
-		192, 168, 0, 1, // 送信元IPアドレス
-		8, 8, 8, 8, // 送信先IPアドレス
-	}
-
-	// 実際に作成したヘッダー
-	actualHeader := createIpHeader(sourceIp, destinationIp)
-
-	// チェックサムの部分をテストするために計算
-	expectedChecksum := calcChecksum(expectedHeader)
-	expectedHeader[10] = byte(expectedChecksum >> 8)
-	expectedHeader[11] = byte(expectedChecksum & 0xff)
-
-	// 検証
-	if !reflect.DeepEqual(actualHeader, expectedHeader) {
-		t.Errorf("createIpHeader(%q, %q) = %v; expect %v", sourceIp, destinationIp, actualHeader, expectedHeader)
-	}
-}
-
 func TestCreateTcpHeader(t *testing.T) {
 	sourceIp := net.IPv4(192, 168, 0, 1)
 	destinationIp := net.IPv4(8, 8, 8, 8)

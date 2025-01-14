@@ -10,7 +10,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -98,12 +97,6 @@ func main() {
 			os.Exit(1)
 		}
 		defer unix.Close(fd)
-
-		fd, err = setIpHeaderInclude(fd)
-		if err != nil {
-			fmt.Println("unix.SetsockoptInt実行時にエラーが発生しました", err)
-			os.Exit(1)
-		}
 
 		// SYNパケットを生成
 		packet := createSynPacket(
@@ -230,27 +223,7 @@ func createSynPacket(
 	destinationPort int,
 	seqNumber uint32,
 ) []byte {
-	ipHeader := createIpHeader(sourceIpAddress, destinationIpAddress)
-	tcpHeader := createTcpHeader(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
-	return append(ipHeader, tcpHeader...)
-}
-
-// IPヘッダーを生成
-func createIpHeader(sourceIpAddress net.IP, destinationIpAddress net.IP) []byte {
-	header := make([]byte, 20)
-	header[0] = 0x45                                // バージョン(4ビット) + ヘッダー長(4ビット)
-	header[1] = 0x00                                // ToS(サービスタイプ)(8ビット)
-	header[2], header[3] = 0x00, 0x28               // パケット長(16ビット)
-	header[4], header[5] = 0x00, 0x00               // 識別子(16ビット)
-	header[6], header[7] = 0x40, 0x00               // フラグ(3ビット) + フラグメントオフセット(13ビット)
-	header[8] = 0x40                                // TTL(8ビット)
-	header[9] = unix.IPPROTO_TCP                    // プロトコル番号(8ビット)
-	copy(header[12:16], sourceIpAddress.To4())      // 送信元IPアドレス(32ビット)
-	copy(header[16:20], destinationIpAddress.To4()) // 送信先IPアドレス(32ビット)
-	// チェックサム計算
-	checksum := calcChecksum(header)
-	header[10], header[11] = byte(checksum>>8), byte(checksum&0xff) // チェックサム(16ビット)
-	return header
+	return createTcpHeader(sourceIpAddress, destinationIpAddress, sourcePort, destinationPort, seqNumber)
 }
 
 // TCPヘッダーを生成
@@ -435,15 +408,6 @@ func createSocket() (int, error) {
 	// - プロトコル:TCP
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_TCP)
 	return fd, err
-}
-
-func setIpHeaderInclude(fd int) (int, error) {
-	if runtime.GOOS != "darwin" {
-		// ソケットオプションでIPヘッダーを手動生成に設定
-		err := unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_HDRINCL, 1)
-		return fd, err
-	}
-	return fd, nil
 }
 
 func sendPacket(fd int, packet []byte, address *unix.SockaddrInet4) (int, error) {
