@@ -90,13 +90,13 @@ func main() {
 		}
 		seqNumber := uint32(n.Int64())
 
-		// ソケットを作成
-		fd, err := createSocket()
+		// 送信用のソケットを作成
+		sendSock, err := createSocket()
 		if err != nil {
 			fmt.Println("unix.Socket実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
-		defer unix.Close(fd)
+		defer unix.Close(sendSock)
 
 		// SYNパケットを生成
 		packet := createSynPacket(
@@ -109,7 +109,7 @@ func main() {
 
 		// 送信元アドレス設定
 		sourceSocketAddress := getSocketAddress(sourceIpAddress, sourcePort)
-		fd, err = bindSocketAddress(fd, sourceSocketAddress)
+		err = bindSocketAddress(sendSock, sourceSocketAddress)
 		if err != nil {
 			fmt.Println("unix.Bind実行時にエラーが発生しました", err)
 			os.Exit(1)
@@ -120,11 +120,19 @@ func main() {
 
 		start := time.Now()
 		// パケットを送信
-		fd, err = sendPacket(fd, packet, destinationSocketAddress)
+		err = sendPacket(sendSock, packet, destinationSocketAddress)
 		if err != nil {
 			fmt.Println("unix.Sendto実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
+
+		// 受信用のソケットを作成
+		recvSock, err := createSocket()
+		if err != nil {
+			fmt.Println("unix.Socket実行時にエラーが発生しました", err)
+			os.Exit(1)
+		}
+		defer unix.Close(recvSock)
 
 		buf := make([]byte, 4096)
 
@@ -132,7 +140,7 @@ func main() {
 		timeout := time.Now().Add(5 * time.Second)
 		for time.Now().Before(timeout) {
 			// パケットを受信
-			fd, err = receivePacket(fd, buf)
+			err = receivePacket(recvSock, buf)
 			if err != nil {
 				// 受信に失敗したのでリトライ
 				continue
@@ -410,14 +418,14 @@ func createSocket() (int, error) {
 	return fd, err
 }
 
-func sendPacket(fd int, packet []byte, address *unix.SockaddrInet4) (int, error) {
+func sendPacket(fd int, packet []byte, address *unix.SockaddrInet4) error {
 	err := unix.Sendto(fd, packet, 0, address)
-	return fd, err
+	return err
 }
 
-func receivePacket(fd int, buf []byte) (int, error) {
+func receivePacket(fd int, buf []byte) error {
 	_, _, err := unix.Recvfrom(fd, buf, 0)
-	return fd, err
+	return err
 }
 
 func getSocketAddress(ipAddress net.IP, port int) *unix.SockaddrInet4 {
@@ -428,9 +436,9 @@ func getSocketAddress(ipAddress net.IP, port int) *unix.SockaddrInet4 {
 	return &address
 }
 
-func bindSocketAddress(fd int, address *unix.SockaddrInet4) (int, error) {
+func bindSocketAddress(fd int, address *unix.SockaddrInet4) error {
 	err := unix.Bind(fd, address)
-	return fd, err
+	return err
 }
 
 func getArguments() (string, int, int) {
