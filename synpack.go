@@ -177,7 +177,7 @@ func main() {
 				rtt := time.Since(start)
 				rtts = append(rtts, rtt)
 				fmt.Printf(
-					"len=%d ip=%s port=%d seq=%d rtt=%.2fms\n",
+					"len=%d ip=%s port=%d seq=%d rtt=%.2f ms\n",
 					len(buf),
 					destinationIpAddress,
 					destinationPort,
@@ -214,7 +214,7 @@ func main() {
 			}
 			sumRtt += rtt
 		}
-		fmt.Printf("round-trip min/avg/max = %.2fms/%.2fms/%.2fms\n",
+		fmt.Printf("round-trip min/avg/max = %.2f/%.2f/%.2f ms\n",
 			float64(minRtt.Microseconds())/1000,
 			float64(sumRtt.Microseconds())/float64(len(rtts))/1000,
 			float64(maxRtt.Microseconds())/1000)
