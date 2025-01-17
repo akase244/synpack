@@ -5,7 +5,7 @@ Its name is derived from the Japanese word "心拍" (shinpaku), meaning "heartbe
 ## Usage
 
 ```
-$ go build -o synpack
+$ CGO_ENABLED=0 go build -o synpack
 $ sudo ./synpack -h github.com -p 80 -c 3
 Synpack eth0 (192.168.0.1) -> github.com (20.27.177.113)
 len=4096 ip=20.27.177.113 port=80 seq=344846291 rtt=29.27 ms
