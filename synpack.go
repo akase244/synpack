@@ -136,8 +136,8 @@ func main() {
 
 		buf := make([]byte, 4096)
 
-		// タイムアウトの設定(5秒)
-		timeout := time.Now().Add(5 * time.Second)
+		// タイムアウトの設定(1秒)
+		timeout := time.Now().Add(1 * time.Second)
 		for time.Now().Before(timeout) {
 			// パケットを受信
 			err = receivePacket(recvSock, buf)
