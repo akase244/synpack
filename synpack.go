@@ -118,75 +118,88 @@ func main() {
 		// 送信先アドレス設定
 		destinationSocketAddress := getSocketAddress(destinationIpAddress, destinationPort)
 
-		start := time.Now()
-		// パケットを送信
-		err = sendPacket(sendSock, packet, destinationSocketAddress)
-		if err != nil {
-			fmt.Println("unix.Sendto実行時にエラーが発生しました", err)
-			os.Exit(1)
-		}
-
-		// 受信用のソケットを作成
-		recvSock, err := createSocket()
-		if err != nil {
-			fmt.Println("unix.Socket実行時にエラーが発生しました", err)
-			os.Exit(1)
-		}
-		defer unix.Close(recvSock)
-
-		buf := make([]byte, 4096)
-
-		// タイムアウトの設定(1秒)
-		timeout := time.Now().Add(1 * time.Second)
-		for time.Now().Before(timeout) {
-			// パケットを受信
-			err = receivePacket(recvSock, buf)
+		// 再実行の回数
+		maxRetryCount := 5
+		for attempt := 0; attempt < maxRetryCount; attempt++ {
+			start := time.Now()
+			// パケットを送信
+			err = sendPacket(sendSock, packet, destinationSocketAddress)
 			if err != nil {
-				// 受信に失敗したのでリトライ
-				continue
+				fmt.Println("unix.Sendto実行時にエラーが発生しました", err)
+				os.Exit(1)
 			}
 
-			if len(buf) < 40 {
-				// パケットが短すぎるのでリトライ
-				continue
+			// 受信用のソケットを作成
+			recvSock, err := createSocket()
+			if err != nil {
+				fmt.Println("unix.Socket実行時にエラーが発生しました", err)
+				os.Exit(1)
 			}
+			defer unix.Close(recvSock)
 
-			tcpHeader := buf[20:40]
-			receivedSourceIpAddress := net.IP(buf[12:16])
-			receivedDestinationIpAddress := net.IP(buf[16:20])
-			receivedSourcePort := int(binary.BigEndian.Uint16(tcpHeader[0:2]))
-			receivedDestinationPort := int(binary.BigEndian.Uint16(tcpHeader[2:4]))
+			buf := make([]byte, 4096)
 
-			// Synフラグ送信時の送信元IPアドレスとパケット受信時の送信先IPアドレスを比較
-			// Synフラグ送信時の送信先IPアドレスとパケット受信時の送信元IPアドレスを比較
-			// Synフラグ送信時の送信元ポートとパケット受信時の送信先ポートを比較
-			// Synフラグ送信時の送信先ポートとパケット受信時の送信元ポートを比較
-			if !receivedDestinationIpAddress.Equal(sourceIpAddress) ||
-				!receivedSourceIpAddress.Equal(destinationIpAddress) ||
-				sourcePort != receivedDestinationPort ||
-				destinationPort != receivedSourcePort {
-				// 不一致の場合は関係ないパケットなのでリトライ
-				continue
+			// タイムアウトの設定(1秒)
+			timeout := time.Now().Add(1 * time.Second)
+			received := false
+			for time.Now().Before(timeout) {
+				// パケットを受信
+				err = receivePacket(recvSock, buf)
+				if err != nil {
+					// 受信に失敗したのでリトライ
+					continue
+				}
+
+				if len(buf) < 40 {
+					// パケットが短すぎるのでリトライ
+					continue
+				}
+
+				tcpHeader := buf[20:40]
+				receivedSourceIpAddress := net.IP(buf[12:16])
+				receivedDestinationIpAddress := net.IP(buf[16:20])
+				receivedSourcePort := int(binary.BigEndian.Uint16(tcpHeader[0:2]))
+				receivedDestinationPort := int(binary.BigEndian.Uint16(tcpHeader[2:4]))
+
+				// Synフラグ送信時の送信元IPアドレスとパケット受信時の送信先IPアドレスを比較
+				// Synフラグ送信時の送信先IPアドレスとパケット受信時の送信元IPアドレスを比較
+				// Synフラグ送信時の送信元ポートとパケット受信時の送信先ポートを比較
+				// Synフラグ送信時の送信先ポートとパケット受信時の送信元ポートを比較
+				if !receivedDestinationIpAddress.Equal(sourceIpAddress) ||
+					!receivedSourceIpAddress.Equal(destinationIpAddress) ||
+					sourcePort != receivedDestinationPort ||
+					destinationPort != receivedSourcePort {
+					// 不一致の場合は関係ないパケットなのでリトライ
+					continue
+				}
+
+				// 受信パケットを解析
+				err = parsePacket(tcpHeader, seqNumber)
+				if err == nil {
+					// SYN-ACK確認成功
+					successReceivedCount++
+					rtt := time.Since(start)
+					rtts = append(rtts, rtt)
+					fmt.Printf(
+						"len=%d ip=%s port=%d seq=%d rtt=%.2f ms attempt=%d times\n",
+						len(buf),
+						destinationIpAddress,
+						destinationPort,
+						seqNumber,
+						float64(rtt.Microseconds())/1000,
+						attempt,
+					)
+					received = true
+					// SYN-ACK確認後に不要な受信処理を行わないようにループを抜ける
+					break
+				}
 			}
-
-			// 受信パケットを解析
-			err = parsePacket(tcpHeader, seqNumber)
-			if err == nil {
-				// SYN-ACK確認成功
-				successReceivedCount++
-				rtt := time.Since(start)
-				rtts = append(rtts, rtt)
-				fmt.Printf(
-					"len=%d ip=%s port=%d seq=%d rtt=%.2f ms\n",
-					len(buf),
-					destinationIpAddress,
-					destinationPort,
-					seqNumber,
-					float64(rtt.Microseconds())/1000,
-				)
-				// SYN-ACK確認後に不要な受信処理を行わないようにループを抜ける
+			// 成功時は再送を行わずループを抜ける
+			if received {
 				break
 			}
+			// 指数バックオフ
+			time.Sleep(time.Duration(attempt+1) * time.Second)
 		}
 		// 送信先に負荷を掛けないように次の実行まで待機
 		time.Sleep(1 * time.Second)
