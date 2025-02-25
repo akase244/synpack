@@ -90,13 +90,13 @@ func main() {
 		}
 		seqNumber := uint32(n.Int64())
 
-		// 送信用のソケットを作成
-		sendSock, err := createSocket()
+		// 送受信用のソケットを作成
+		socket, err := createSocket()
 		if err != nil {
 			fmt.Println("unix.Socket実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
-		defer unix.Close(sendSock)
+		defer unix.Close(socket)
 
 		// SYNパケットを生成
 		packet := createSynPacket(
@@ -109,7 +109,7 @@ func main() {
 
 		// 送信元アドレス設定
 		sourceSocketAddress := getSocketAddress(sourceIpAddress, sourcePort)
-		err = bindSocketAddress(sendSock, sourceSocketAddress)
+		err = bindSocketAddress(socket, sourceSocketAddress)
 		if err != nil {
 			fmt.Println("unix.Bind実行時にエラーが発生しました", err)
 			os.Exit(1)
@@ -120,19 +120,11 @@ func main() {
 
 		start := time.Now()
 		// パケットを送信
-		err = sendPacket(sendSock, packet, destinationSocketAddress)
+		err = sendPacket(socket, packet, destinationSocketAddress)
 		if err != nil {
 			fmt.Println("unix.Sendto実行時にエラーが発生しました", err)
 			os.Exit(1)
 		}
-
-		// 受信用のソケットを作成
-		recvSock, err := createSocket()
-		if err != nil {
-			fmt.Println("unix.Socket実行時にエラーが発生しました", err)
-			os.Exit(1)
-		}
-		defer unix.Close(recvSock)
 
 		buf := make([]byte, 4096)
 
@@ -140,7 +132,7 @@ func main() {
 		timeout := time.Now().Add(1 * time.Second)
 		for time.Now().Before(timeout) {
 			// パケットを受信
-			err = receivePacket(recvSock, buf)
+			err = receivePacket(socket, buf)
 			if err != nil {
 				// 受信に失敗したのでリトライ
 				continue
