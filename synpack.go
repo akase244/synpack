@@ -76,7 +76,7 @@ func main() {
 		}
 
 		// 送信元ポート番号（毎実行時にポート番号を変える）
-		sourcePort := generateAvailablePort()
+		sourcePort := generateAvailablePort(sourceIpAddress)
 		if sourcePort == 0 {
 			fmt.Println("ローカルで有効なポート番号を取得できません")
 			os.Exit(1)
@@ -355,7 +355,7 @@ func hasDockerInterfaceName(name string) bool {
 }
 
 // ローカルで利用可能なポート番号を取得
-func generateAvailablePort() int {
+func generateAvailablePort(sourceIpAddress net.IP) int {
 	// 再実行の回数
 	maxRetryCount := 5
 	// ポート番号の範囲
@@ -369,15 +369,15 @@ func generateAvailablePort() int {
 		}
 		port := int(n.Int64()) + minPort
 		// ポートが空いているか確認
-		if isAvailablePort(port) {
+		if isAvailablePort(sourceIpAddress, port) {
 			return port
 		}
 	}
 	return 0
 }
 
-func isAvailablePort(port int) bool {
-	address := fmt.Sprintf("127.0.0.1:%d", port)
+func isAvailablePort(sourceIpAddress net.IP, port int) bool {
+	address := fmt.Sprintf("%s:%d", sourceIpAddress.To4(), port)
 	listener, err := net.Listen("tcp", address)
 	// LISTEN不可の場合は利用できない（他の処理で利用中のポート）
 	if err != nil {
