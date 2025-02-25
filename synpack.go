@@ -354,37 +354,20 @@ func hasDockerInterfaceName(name string) bool {
 	return false
 }
 
-// ローカルで利用可能なポート番号を取得
+// 利用可能なポート番号を取得
 func generateAvailablePort(sourceIpAddress net.IP) int {
-	// 再実行の回数
-	maxRetryCount := 5
-	// ポート番号の範囲
-	minPort := 49152
-	maxPort := 65535
-	for i := 0; i < maxRetryCount; i++ {
-		// ポート番号をランダムに取得
-		n, err := rand.Int(rand.Reader, big.NewInt(int64(maxPort-minPort+1)))
-		if err != nil {
-			return 0
-		}
-		port := int(n.Int64()) + minPort
-		// ポートが空いているか確認
-		if isAvailablePort(sourceIpAddress, port) {
-			return port
-		}
-	}
-	return 0
-}
-
-func isAvailablePort(sourceIpAddress net.IP, port int) bool {
-	address := fmt.Sprintf("%s:%d", sourceIpAddress.To4(), port)
-	listener, err := net.Listen("tcp", address)
+	// 「:0」を指定することでシステムで利用可能なポート番号を返す
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:0", sourceIpAddress.To4()))
 	// LISTEN不可の場合は利用できない（他の処理で利用中のポート）
 	if err != nil {
-		return false
+		return 0
 	}
 	defer listener.Close()
-	return true
+	address, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0
+	}
+	return address.Port
 }
 
 func getTargetIpAddress(destinationHost string) string {
