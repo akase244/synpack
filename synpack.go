@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -23,6 +24,27 @@ const (
 func main() {
 	// 引数を取得
 	destinationHost, destinationPort, maxExecutionCount := getArguments()
+
+	// macOSでのフォールバック実行
+	if runtime.GOOS == "darwin" && os.Geteuid() != 0 {
+		fmt.Println("macOSで非root権限で実行中: TCP接続テストモードを使用します")
+		runTcpConnectionTest(destinationHost, destinationPort, maxExecutionCount)
+		return
+	}
+	
+	// macOSでroot権限があってもrawソケットの問題がある場合のフォールバック
+	if runtime.GOOS == "darwin" && os.Geteuid() == 0 {
+		fmt.Println("警告: macOSではrawソケットの制限により、TCP接続テストモードを推奨します")
+		fmt.Println("rawソケットモードを続行する場合は継続し、問題が発生した場合は非root権限で再実行してください")
+	}
+
+	// root権限チェック
+	if os.Geteuid() != 0 {
+		fmt.Println("エラー: このプログラムはroot権限で実行する必要があります")
+		fmt.Println("sudo ./synpack -h <ホスト> -p <ポート> -c <回数> で実行してください")
+		fmt.Println("または、macOSでは非root権限でTCP接続テストモードが利用可能です")
+		os.Exit(1)
+	}
 
 	// シグナル受信設定
 	signalChan := make(chan os.Signal, 1)
@@ -93,10 +115,10 @@ func main() {
 		// 送受信用のソケットを作成
 		socket, err := createSocket()
 		if err != nil {
-			fmt.Println("unix.Socket実行時にエラーが発生しました", err)
+			fmt.Printf("unix.Socket実行時にエラーが発生しました: %v\n", err)
+			fmt.Println("macOSでは「システム環境設定 > セキュリティとプライバシー > プライバシー > フルディスクアクセス」でターミナルを許可する必要がある場合があります")
 			os.Exit(1)
 		}
-		defer unix.Close(socket)
 
 		// SYNパケットを生成
 		packet := createSynPacket(
@@ -122,23 +144,56 @@ func main() {
 		// パケットを送信
 		err = sendPacket(socket, packet, destinationSocketAddress)
 		if err != nil {
-			fmt.Println("unix.Sendto実行時にエラーが発生しました", err)
+			fmt.Printf("unix.Sendto実行時にエラーが発生しました: %v\n", err)
 			os.Exit(1)
+		}
+		
+		// macOS用デバッグ情報
+		if runtime.GOOS == "darwin" {
+			fmt.Printf("デバッグ: パケット送信完了 (len=%d, src=%s:%d -> dst=%s:%d)\n",
+				len(packet), sourceIpAddress, sourcePort, destinationIpAddress, destinationPort)
 		}
 
 		buf := make([]byte, 4096)
 
 		// タイムアウトの設定(1秒)
 		timeout := time.Now().Add(1 * time.Second)
+		receivedPacketCount := 0
 		for time.Now().Before(timeout) {
 			// パケットを受信
 			err = receivePacket(socket, buf)
 			if err != nil {
-				// 受信に失敗したのでリトライ
+				// タイムアウトまたは受信エラーをチェック
+				if strings.Contains(err.Error(), "resource temporarily unavailable") {
+					// タイムアウト（正常）なのでリトライ
+					continue
+				}
+				// macOS用デバッグ情報
+				if runtime.GOOS == "darwin" {
+					fmt.Printf("デバッグ: 受信エラー - %v\n", err)
+				}
 				continue
 			}
+			
+			receivedPacketCount++
+			// macOS用デバッグ情報
+			if runtime.GOOS == "darwin" {
+				fmt.Printf("デバッグ: パケット受信 #%d (len=%d bytes)\n", receivedPacketCount, len(buf))
+			}
 
-			if len(buf) < 40 {
+			// 受信データ長をチェック
+			receivedLen := 0
+			for i, b := range buf {
+				if b == 0 {
+					receivedLen = i
+					break
+				}
+			}
+			if receivedLen == 0 {
+				receivedLen = len(buf)
+			}
+			
+			if receivedLen < 40 {
 				// パケットが短すぎるのでリトライ
 				continue
 			}
@@ -170,7 +225,7 @@ func main() {
 				rtts = append(rtts, rtt)
 				fmt.Printf(
 					"len=%d ip=%s port=%d seq=%d rtt=%.2f ms\n",
-					len(buf),
+					receivedLen,
 					destinationIpAddress,
 					destinationPort,
 					seqNumber,
@@ -180,6 +235,10 @@ func main() {
 				break
 			}
 		}
+		
+		// ソケットをクローズ
+		unix.Close(socket)
+		
 		// 送信先に負荷を掛けないように次の実行まで待機
 		time.Sleep(1 * time.Second)
 
@@ -399,7 +458,16 @@ func sendPacket(fd int, packet []byte, address *unix.SockaddrInet4) error {
 }
 
 func receivePacket(fd int, buf []byte) error {
-	_, _, err := unix.Recvfrom(fd, buf, 0)
+	// ソケットにタイムアウトを設定（100ms）
+	err := unix.SetsockoptTimeval(fd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &unix.Timeval{
+		Sec:  0,
+		Usec: 100000, // 100ms
+	})
+	if err != nil {
+		return fmt.Errorf("ソケットタイムアウト設定エラー: %v", err)
+	}
+	
+	_, _, err = unix.Recvfrom(fd, buf, 0)
 	return err
 }
 
@@ -445,4 +513,56 @@ func getArguments() (string, int, int) {
 	}
 
 	return *argHost, *argPort, *argCount
+}
+
+// TCP接続テストモード（macOS非root権限用）
+func runTcpConnectionTest(destinationHost string, destinationPort int, maxExecutionCount int) {
+	var rtts []time.Duration
+	successCount := 0
+	
+	fmt.Printf("TCP接続テスト: %s:%d\n", destinationHost, destinationPort)
+	
+	for i := 0; i < maxExecutionCount; i++ {
+		start := time.Now()
+		
+		// TCP接続をテスト
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", destinationHost, destinationPort), 3*time.Second)
+		rtt := time.Since(start)
+		
+		if err != nil {
+			fmt.Printf("接続テスト %d: 失敗 - %v\n", i+1, err)
+		} else {
+			conn.Close()
+			rtts = append(rtts, rtt)
+			successCount++
+			fmt.Printf("接続テスト %d: 成功 - rtt=%.2f ms\n", i+1, float64(rtt.Microseconds())/1000)
+		}
+		
+		if i < maxExecutionCount-1 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+	
+	// 結果表示
+	fmt.Printf("\n--- %s TCP接続テスト結果 ---\n", destinationHost)
+	fmt.Printf("%d 接続試行, %d 成功, %.2f%% 失敗率\n",
+		maxExecutionCount, successCount,
+		float64(maxExecutionCount-successCount)/float64(maxExecutionCount)*100)
+		
+	if len(rtts) > 0 {
+		minRtt, maxRtt, sumRtt := rtts[0], rtts[0], time.Duration(0)
+		for _, rtt := range rtts {
+			if rtt < minRtt {
+				minRtt = rtt
+			}
+			if rtt > maxRtt {
+				maxRtt = rtt
+			}
+			sumRtt += rtt
+		}
+		fmt.Printf("接続時間 min/avg/max = %.2f/%.2f/%.2f ms\n",
+			float64(minRtt.Microseconds())/1000,
+			float64(sumRtt.Microseconds())/float64(len(rtts))/1000,
+			float64(maxRtt.Microseconds())/1000)
+	}
 }
