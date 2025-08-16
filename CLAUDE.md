@@ -102,11 +102,11 @@ sudo go run synpack.go -h 8.8.8.8 -p 53 -c 3
 - macOSのSIP(System Integrity Protection)によりセキュリティの制限がある。
 - macOSではraw socketを利用する際の制限がLinuxより厳しいと考えられる。
 - sudoを付与して実行するだけでなく「プライバシーとセキュリティ」の設定変更が必要と思われる。
-    - プライバシーとセキュリティ > フルディスクアクセス > 使用するターミナルアプリを追加
 - `golang.org/x/sys/unix` を利用する際にmacOS固有の指定方法を調査する必要あり。
-    - `unix.IPPROTO_TCP` を `unix.IPPROTO_RAW` に変更する？
-    - TCPヘッダーだけでなくIPヘッダーを作成する必要あり？
-    - `IP_HDRINCL` オプションを指定する？
+    - 送信パケットを作成する際にTCPヘッダーだけでなくIPヘッダーも作成する必要あり。
+    - パケット受信時に `unix.IPPROTO_TCP` ではなく `unix.IPPROTO_RAW` を利用する。
+        - `IP_HDRINCL` オプションを指定する。
+    - `unix.Sendto`は機能するが、`unix.Recvfrom`が制限される模様。
 
 ### 参考資料
 - https://sock-raw.org/papers/sock_raw 
